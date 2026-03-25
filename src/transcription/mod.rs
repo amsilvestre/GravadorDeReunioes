@@ -18,6 +18,7 @@ pub trait TranscriptionEngine: Send + Sync {
     fn transcribe(
         &self,
         wav_path: &Path,
+        language: Option<&str>,
         on_progress: Box<dyn Fn(f32) + Send>,
     ) -> Result<Vec<TranscriptionSegment>>;
 }

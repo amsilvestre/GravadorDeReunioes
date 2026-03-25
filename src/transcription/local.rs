@@ -13,8 +13,7 @@ impl LocalEngine {
 
     /// Carrega arquivo WAV e converte para 16kHz mono f32 (formato exigido pelo whisper)
     fn load_wav_as_16khz_mono(wav_path: &Path) -> Result<Vec<f32>> {
-        let mut reader =
-            hound::WavReader::open(wav_path).context("Falha ao abrir arquivo WAV")?;
+        let mut reader = hound::WavReader::open(wav_path).context("Falha ao abrir arquivo WAV")?;
         let spec = reader.spec();
 
         // Le todos os samples como f32
@@ -76,6 +75,7 @@ impl TranscriptionEngine for LocalEngine {
     fn transcribe(
         &self,
         wav_path: &Path,
+        language: Option<&str>,
         on_progress: Box<dyn Fn(f32) + Send>,
     ) -> Result<Vec<TranscriptionSegment>> {
         on_progress(0.05);
@@ -108,10 +108,16 @@ impl TranscriptionEngine for LocalEngine {
         on_progress(0.3);
 
         // Configura parametros de transcricao
-        let mut params = whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy {
-            best_of: 1,
-        });
-        params.set_language(Some("pt"));
+        let mut params =
+            whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
+
+        // Define idioma ou auto-detect
+        if let Some(lang) = language {
+            params.set_language(Some(lang));
+        } else {
+            params.set_language(None); // Auto-detect
+        }
+
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);
@@ -129,7 +135,9 @@ impl TranscriptionEngine for LocalEngine {
         });
 
         // Executa transcricao
-        let mut state = ctx.create_state().context("Falha ao criar estado Whisper")?;
+        let mut state = ctx
+            .create_state()
+            .context("Falha ao criar estado Whisper")?;
         state
             .full(params, &audio_data)
             .context("Falha durante transcricao Whisper")?;
@@ -140,7 +148,11 @@ impl TranscriptionEngine for LocalEngine {
 
         for i in 0..num_segments {
             if let Some(segment) = state.get_segment(i) {
-                let text = segment.to_str_lossy().unwrap_or_default().trim().to_string();
+                let text = segment
+                    .to_str_lossy()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
                 let start_cs = segment.start_timestamp(); // centiseconds
                 let end_cs = segment.end_timestamp();
                 segments.push(TranscriptionSegment {

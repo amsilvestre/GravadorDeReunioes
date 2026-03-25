@@ -7,6 +7,7 @@ import { HistoryPanel, RecordingItem } from "history.slint";
 
 export { TranscriptionSegment }
 export { RecordingItem }
+export { AppStyle }
 
 component SidebarButton inherits Rectangle {
     in property <string> label;
@@ -65,6 +66,8 @@ export component AppWindow inherits Window {
 
     // === Propriedades de gravacao ===
     in property <bool> is-recording: false;
+    in property <bool> is-paused: false;
+    in-out property <int> recording_delay_index: 0;
     in property <string> recording-duration: "00:00:00";
     in property <float> audio-level: 0.0;
     in property <string> recording-status: "Pronto para gravar";
@@ -76,10 +79,13 @@ export component AppWindow inherits Window {
     in property <bool> is-transcribing: false;
     in property <string> transcription-status: "";
     in property <bool> has-recording: false;
+    in-out property <string> transcription-search: "";
 
     // === Propriedades de configuracao ===
     in-out property <int> engine-index: 0;
+    in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
+    in-out property <int> language-index: 0;
     in-out property <string> api-key: "";
 
     // === Propriedades de historico ===
@@ -89,13 +95,17 @@ export component AppWindow inherits Window {
     // === Callbacks ===
     callback start-recording();
     callback stop-recording();
+    callback pause-recording();
+    callback resume-recording();
     callback transcribe();
     callback copy-to-clipboard();
     callback export-text();
     callback save-settings();
     callback api-key-changed(string);
     callback engine-changed(int);
+    callback theme-changed(int);
     callback model-changed(int);
+    callback language-changed(int);
     callback load-recordings();
     callback select-recording(int);
     callback delete-recording(int);
@@ -204,11 +214,15 @@ export component AppWindow inherits Window {
 
                     rec := RecordingPanel {
                         is-recording: root.is-recording;
+                        is-paused: root.is-paused;
+                        delay_index <=> root.recording_delay_index;
                         duration: root.recording-duration;
                         audio-level: root.audio-level;
                         status-text: root.recording-status;
                         start-recording => { root.start-recording(); }
                         stop-recording => { root.stop-recording(); }
+                        pause-recording => { root.pause-recording(); }
+                        resume-recording => { root.resume-recording(); }
                     }
 
                     trans := TranscriptionPanel {
@@ -218,6 +232,7 @@ export component AppWindow inherits Window {
                         is-transcribing: root.is-transcribing;
                         status-text: root.transcription-status;
                         has-recording: root.has-recording;
+                        search-text <=> root.transcription-search;
                         transcribe => { root.transcribe(); }
                         copy-to-clipboard => { root.copy-to-clipboard(); }
                         export-text => { root.export-text(); }
@@ -238,12 +253,16 @@ export component AppWindow inherits Window {
                 // Pagina de configuracoes
                 if root.active-page == 2: SettingsPanel {
                     engine-index <=> root.engine-index;
+                    theme_index <=> root.theme_index;
                     model-index <=> root.model-index;
+                    language-index <=> root.language-index;
                     api-key <=> root.api-key;
                     save-settings => { root.save-settings(); }
                     api-key-changed(key) => { root.api-key-changed(key); }
                     engine-changed(idx) => { root.engine-changed(idx); }
+                    theme-changed(idx) => { root.theme-changed(idx); }
                     model-changed(idx) => { root.model-changed(idx); }
+                    language-changed(idx) => { root.language-changed(idx); }
                 }
             }
         }

@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ScrollView, LineEdit } from "std-widgets.slint";
 import { AppStyle } from "style.slint";
 
 export struct RecordingItem {
@@ -16,8 +16,14 @@ export component HistoryPanel inherits Rectangle {
     in property <[RecordingItem]> recordings: [];
     in-out property <int> selected-id: -1;
 
+    // id do item sendo renomeado (-1 = nenhum)
+    private property <int> renaming-id: -1;
+    private property <string> rename-buffer: "";
+
     callback refresh();
     callback load-recording(int);
+    callback delete-recording(int);
+    callback rename-recording(int, string);
 
     VerticalBox {
         padding: AppStyle.spacing;
@@ -27,6 +33,7 @@ export component HistoryPanel inherits Rectangle {
         HorizontalBox {
             spacing: AppStyle.spacing;
             alignment: start;
+            height: 36px;
 
             Text {
                 text: "Historico";
@@ -52,91 +59,174 @@ export component HistoryPanel inherits Rectangle {
                 spacing: AppStyle.spacing-small;
 
                 for rec in root.recordings: Rectangle {
-                    height: 64px;
-                    border-radius: 6px;
+                    height: root.renaming-id == rec.id ? 80px : 64px;
+                    border-radius: AppStyle.border-radius-small;
                     background: rec.id == root.selected-id
-                        ? AppStyle.primary-light.with-alpha(0.15)
+                        ? AppStyle.primary-light.with-alpha(0.12)
                         : AppStyle.bg-main;
                     border-width: rec.id == root.selected-id ? 2px : 1px;
                     border-color: rec.id == root.selected-id
                         ? AppStyle.primary
                         : #E0E0E0;
 
+                    // Seleciona ao clicar (apenas quando nao esta renomeando)
                     TouchArea {
+                        enabled: root.renaming-id != rec.id;
                         clicked => { root.selected-id = rec.id; }
                     }
 
-                    HorizontalBox {
+                    VerticalBox {
                         padding: AppStyle.spacing-small;
-                        spacing: AppStyle.spacing-small;
-                        alignment: start;
+                        spacing: 4px;
 
-                        // Indicador de status
-                        Rectangle {
-                            width: 10px;
-                            height: 10px;
-                            border-radius: 5px;
-                            y: (parent.height - self.height) / 2;
-                            background: rec.status == "done"
-                                ? AppStyle.success-green
-                                : rec.status == "error"
-                                    ? AppStyle.recording-red
-                                    : AppStyle.warning-yellow;
-                        }
+                        // Linha principal: dot + nome + acoes
+                        HorizontalBox {
+                            spacing: AppStyle.spacing-small;
+                            alignment: start;
+                            height: 32px;
 
-                        VerticalBox {
-                            spacing: 2px;
-                            horizontal-stretch: 1;
+                            // Indicador de status
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                border-radius: 4px;
+                                y: (parent.height - self.height) / 2;
+                                background: rec.status == "done"
+                                    ? AppStyle.success-green
+                                    : rec.status == "error"
+                                        ? AppStyle.recording-red
+                                        : AppStyle.warning-yellow;
+                            }
 
-                            Text {
+                            // Nome (ou campo de edicao)
+                            if root.renaming-id != rec.id: Text {
                                 text: rec.name;
                                 font-size: 13px;
                                 font-weight: 600;
                                 color: AppStyle.text-primary;
                                 overflow: elide;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
                             }
 
-                            HorizontalBox {
-                                spacing: AppStyle.spacing-small;
-                                alignment: start;
+                            if root.renaming-id == rec.id: LineEdit {
+                                text: root.rename-buffer;
+                                horizontal-stretch: 1;
+                                edited(val) => { root.rename-buffer = val; }
+                                accepted(val) => {
+                                    root.rename-recording(rec.id, val);
+                                    root.renaming-id = -1;
+                                }
+                            }
 
-                                Text {
-                                    text: rec.date;
-                                    font-size: 11px;
-                                    color: AppStyle.text-secondary;
+                            // Botoes de acao (sempre visiveis)
+                            if root.renaming-id != rec.id: HorizontalBox {
+                                spacing: 4px;
+                                alignment: end;
+
+                                // Botao Renomear
+                                Rectangle {
+                                    width: 28px;
+                                    height: 28px;
+                                    border-radius: 4px;
+                                    background: rename-touch.has-hover
+                                        ? AppStyle.primary-light.with-alpha(0.15)
+                                        : transparent;
+
+                                    rename-touch := TouchArea {
+                                        clicked => {
+                                            root.renaming-id = rec.id;
+                                            root.rename-buffer = rec.name;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "✏";
+                                        font-size: 14px;
+                                        color: AppStyle.text-secondary;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
                                 }
 
-                                Text {
-                                    text: "•";
-                                    font-size: 11px;
-                                    color: AppStyle.text-secondary;
+                                // Botao Excluir
+                                Rectangle {
+                                    width: 28px;
+                                    height: 28px;
+                                    border-radius: 4px;
+                                    background: del-touch.has-hover
+                                        ? AppStyle.recording-red.with-alpha(0.12)
+                                        : transparent;
+
+                                    del-touch := TouchArea {
+                                        clicked => {
+                                            root.delete-recording(rec.id);
+                                            if root.selected-id == rec.id {
+                                                root.selected-id = -1;
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "🗑";
+                                        font-size: 14px;
+                                        color: AppStyle.recording-red;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+
+                            // Botoes de confirmar/cancelar rename
+                            if root.renaming-id == rec.id: HorizontalBox {
+                                spacing: 4px;
+                                alignment: end;
+
+                                Button {
+                                    text: "OK";
+                                    primary: true;
+                                    clicked => {
+                                        root.rename-recording(rec.id, root.rename-buffer);
+                                        root.renaming-id = -1;
+                                    }
                                 }
 
-                                Text {
-                                    text: rec.duration;
-                                    font-size: 11px;
-                                    color: AppStyle.text-secondary;
+                                Button {
+                                    text: "X";
+                                    clicked => { root.renaming-id = -1; }
                                 }
+                            }
+                        }
 
-                                Text {
-                                    text: "•";
-                                    font-size: 11px;
-                                    color: AppStyle.text-secondary;
-                                }
+                        // Linha secundaria: metadados
+                        if root.renaming-id != rec.id: HorizontalBox {
+                            spacing: AppStyle.spacing-small;
+                            alignment: start;
+                            padding-left: 16px;
 
-                                Text {
-                                    text: rec.status == "done"
-                                        ? "Transcrito"
-                                        : rec.status == "error"
-                                            ? "Erro"
-                                            : "Pendente";
-                                    font-size: 11px;
-                                    color: rec.status == "done"
-                                        ? AppStyle.success-green
-                                        : rec.status == "error"
-                                            ? AppStyle.recording-red
-                                            : AppStyle.warning-yellow;
-                                }
+                            Text {
+                                text: rec.date;
+                                font-size: 11px;
+                                color: AppStyle.text-secondary;
+                            }
+
+                            Text { text: "•"; font-size: 11px; color: AppStyle.text-secondary; }
+
+                            Text {
+                                text: rec.duration;
+                                font-size: 11px;
+                                color: AppStyle.text-secondary;
+                            }
+
+                            Text { text: "•"; font-size: 11px; color: AppStyle.text-secondary; }
+
+                            Text {
+                                text: rec.status == "done" ? "Transcrito"
+                                    : rec.status == "error" ? "Erro" : "Pendente";
+                                font-size: 11px;
+                                color: rec.status == "done" ? AppStyle.success-green
+                                    : rec.status == "error" ? AppStyle.recording-red
+                                    : AppStyle.warning-yellow;
                             }
                         }
                     }

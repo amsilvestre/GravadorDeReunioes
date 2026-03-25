@@ -1,64 +1,100 @@
-import { Button, VerticalBox, HorizontalBox, ProgressIndicator } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ComboBox } from "std-widgets.slint";
 import { AppStyle } from "style.slint";
 
 export component RecordingPanel inherits Rectangle {
     background: AppStyle.bg-surface;
     border-radius: AppStyle.border-radius;
 
-    // Propriedades de entrada (Rust -> UI)
     in property <bool> is-recording: false;
+    in property <bool> is-paused: false;
+    in-out property <int> delay_index: 0;
     in property <string> duration: "00:00:00";
     in property <float> audio-level: 0.0;
     in property <string> status-text: "Pronto para gravar";
+    in property <[string]> delay_options: ["Agora", "10s", "30s", "60s"];
 
-    // Callbacks (UI -> Rust)
     callback start-recording();
     callback stop-recording();
+    callback pause-recording();
+    callback resume-recording();
 
     VerticalBox {
-        padding: AppStyle.spacing;
-        spacing: AppStyle.spacing;
+        padding: AppStyle.spacing-small;
+        spacing: AppStyle.spacing-small;
 
-        // Status da gravacao
+        // Linha principal: status | timer | botao
         HorizontalBox {
-            alignment: center;
-            spacing: AppStyle.spacing-small;
+            spacing: AppStyle.spacing;
+            alignment: start;
+            height: 56px;
 
-            // Indicador de gravacao (bolinha vermelha)
-            if is-recording: Rectangle {
-                width: 12px;
-                height: 12px;
-                border-radius: 6px;
-                background: AppStyle.recording-red;
+            // Status (dot + texto)
+            HorizontalBox {
+                spacing: AppStyle.spacing-small;
+                alignment: start;
+                horizontal-stretch: 1;
 
-                animate background {
-                    duration: 800ms;
-                    easing: ease-in-out;
+                if root.is-recording: Rectangle {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 5px;
+                    y: (parent.height - self.height) / 2;
+                    background: AppStyle.recording-red;
+                }
+
+                Text {
+                    text: root.status-text;
+                    font-size: 13px;
+                    color: root.is-recording ? AppStyle.recording-red : AppStyle.text-secondary;
+                    vertical-alignment: center;
                 }
             }
 
+            // Timer centralizado
             Text {
-                text: root.status-text;
-                font-size: 16px;
-                color: is-recording ? AppStyle.recording-red : AppStyle.text-secondary;
+                text: root.duration;
+                font-size: 32px;
+                font-weight: 400;
+                color: AppStyle.text-primary;
+                horizontal-alignment: center;
                 vertical-alignment: center;
             }
-        }
 
-        // Timer
-        Text {
-            text: root.duration;
-            font-size: 48px;
-            font-weight: 300;
-            color: AppStyle.text-primary;
-            horizontal-alignment: center;
+            // Botoes alinhados a direita
+            HorizontalBox {
+                horizontal-stretch: 1;
+                alignment: end;
+                spacing: AppStyle.spacing-small;
+
+                if !root.is-recording: Button {
+                    text: "Iniciar Gravacao";
+                    primary: true;
+                    clicked => { root.start-recording(); }
+                }
+
+                if root.is-recording && !root.is-paused: Button {
+                    text: "Pausar";
+                    clicked => { root.pause-recording(); }
+                }
+
+                if root.is-recording && root.is-paused: Button {
+                    text: "Retomar";
+                    primary: true;
+                    clicked => { root.resume-recording(); }
+                }
+
+                if root.is-recording: Button {
+                    text: "Parar";
+                    clicked => { root.stop-recording(); }
+                }
+            }
         }
 
         // Medidor de nivel de audio
         Rectangle {
-            height: 8px;
-            border-radius: 4px;
-            background: #E0E0E0;
+            height: 6px;
+            border-radius: 3px;
+            background: AppStyle.divider;
 
             Rectangle {
                 width: parent.width * clamp(root.audio-level, 0, 1);
@@ -75,20 +111,21 @@ export component RecordingPanel inherits Rectangle {
             }
         }
 
-        // Botoes de controle
-        HorizontalBox {
-            alignment: center;
-            spacing: AppStyle.spacing;
+        if !root.is-recording: HorizontalBox {
+            spacing: AppStyle.spacing-small;
+            alignment: start;
 
-            if !is-recording: Button {
-                text: "Iniciar Gravacao";
-                primary: true;
-                clicked => { root.start-recording(); }
+            Text {
+                text: "Iniciar em";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
+                vertical-alignment: center;
             }
 
-            if is-recording: Button {
-                text: "Parar Gravacao";
-                clicked => { root.stop-recording(); }
+            ComboBox {
+                model: root.delay_options;
+                current-index <=> root.delay_index;
+                width: 110px;
             }
         }
     }

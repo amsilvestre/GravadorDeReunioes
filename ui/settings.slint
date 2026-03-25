@@ -7,16 +7,22 @@ export component SettingsPanel inherits Rectangle {
 
     // Propriedades
     in-out property <int> engine-index: 0;  // 0 = Cloud, 1 = Local
+    in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
+    in-out property <int> language-index: 0;
     in-out property <string> api-key: "";
     in property <[string]> available-models: ["tiny", "base", "small", "medium", "large"];
     in property <[string]> engine-options: ["Cloud (OpenAI)", "Local (Whisper)"];
+    in property <[string]> theme-options: ["Claro", "Escuro"];
+    in property <[string]> language-options: ["Portugues", "Ingles", "Espanhol", "Frances", "Alemao", "Italiano", "Japones", "Chines", "Automatico"];
 
     // Callbacks
     callback save-settings();
     callback api-key-changed(string);
     callback engine-changed(int);
     callback model-changed(int);
+    callback theme-changed(int);
+    callback language-changed(int);
 
     VerticalBox {
         padding: AppStyle.spacing;
@@ -44,6 +50,48 @@ export component SettingsPanel inherits Rectangle {
                 model: root.engine-options;
                 current-index <=> root.engine-index;
                 selected(value) => { root.engine-changed(self.current-index); }
+            }
+        }
+
+        // Idioma
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Idioma";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.language-options;
+                current-index <=> root.language-index;
+                selected(value) => { root.language-changed(self.current-index); }
+            }
+
+            Text {
+                text: "Idioma para transcricao. Automatico detecta automaticamente.";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Tema";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.theme-options;
+                current-index <=> root.theme_index;
+                selected(value) => { root.theme-changed(self.current-index); }
             }
         }
 
@@ -85,6 +133,25 @@ export component SettingsPanel inherits Rectangle {
 
             Text {
                 text: "Modelos maiores sao mais precisos, mas mais lentos em CPU.";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
+                wrap: word-wrap;
+            }
+        }
+
+        // Pasta de saida
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Pasta de Saida";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            Text {
+                text: "As gravacoes serao salvas nesta pasta.";
                 font-size: 12px;
                 color: AppStyle.text-secondary;
                 wrap: word-wrap;

@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, ScrollView, ComboBox, ProgressIndicator } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ScrollView, ComboBox, ProgressIndicator, LineEdit } from "std-widgets.slint";
 import { AppStyle } from "style.slint";
 
 export struct TranscriptionSegment {
@@ -9,6 +9,7 @@ export struct TranscriptionSegment {
 export component TranscriptionPanel inherits Rectangle {
     background: AppStyle.bg-surface;
     border-radius: AppStyle.border-radius;
+    vertical-stretch: 1;
 
     // Propriedades de entrada
     in property <string> engine: "cloud";
@@ -17,6 +18,9 @@ export component TranscriptionPanel inherits Rectangle {
     in property <bool> is-transcribing: false;
     in property <string> status-text: "";
     in property <bool> has-recording: false;
+
+    // Propriedade de busca
+    in-out property <string> search-text: "";
 
     // Callbacks
     callback transcribe();
@@ -59,6 +63,36 @@ export component TranscriptionPanel inherits Rectangle {
             }
         }
 
+        // Campo de busca
+        if root.segments.length > 0: HorizontalBox {
+            spacing: AppStyle.spacing-small;
+
+            Rectangle {
+                width: 200px;
+                height: 32px;
+                border-radius: 4px;
+                background: AppStyle.bg-main;
+
+                search-input := LineEdit {
+                    placeholder-text: "Buscar no texto...";
+                    text <=> root.search-text;
+                    height: 100%;
+                    width: 100%;
+                }
+            }
+
+            Button {
+                text: "Buscar";
+            }
+
+            if root.search-text != "": Text {
+                text: "Pressione Enter ou clique em Buscar";
+                font-size: 11px;
+                color: AppStyle.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+
         // Texto de status (sempre visivel quando houver mensagem)
         if root.status-text != "": Text {
             text: root.status-text;
@@ -92,7 +126,7 @@ export component TranscriptionPanel inherits Rectangle {
 
                     Text {
                         text: segment.text;
-                        font-size: 14px;
+                        font-size: 15px;
                         color: AppStyle.text-primary;
                         wrap: word-wrap;
                         horizontal-stretch: 1;
@@ -107,7 +141,7 @@ export component TranscriptionPanel inherits Rectangle {
 
             Text {
                 text: root.has-recording ? "Clique em 'Transcrever' para iniciar" : "Grave uma reuniao primeiro";
-                font-size: 14px;
+                font-size: 16px;
                 color: AppStyle.text-secondary;
                 horizontal-alignment: center;
                 vertical-alignment: center;

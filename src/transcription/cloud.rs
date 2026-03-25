@@ -21,6 +21,7 @@ impl TranscriptionEngine for CloudEngine {
     fn transcribe(
         &self,
         wav_path: &Path,
+        language: Option<&str>,
         on_progress: Box<dyn Fn(f32) + Send>,
     ) -> Result<Vec<TranscriptionSegment>> {
         let api_key = self.api_key.clone();
@@ -50,10 +51,13 @@ impl TranscriptionEngine for CloudEngine {
 
             on_progress(0.2);
 
+            // Define idioma
+            let lang = language.unwrap_or("pt");
+
             let request = CreateTranscriptionRequestArgs::default()
                 .file(wav_path)
                 .model("whisper-1")
-                .language("pt")
+                .language(lang)
                 .response_format(AudioResponseFormat::VerboseJson)
                 .build()?;
 

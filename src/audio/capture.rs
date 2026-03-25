@@ -188,6 +188,26 @@ impl AudioCapture {
         self.loopback_stream.take();
     }
 
+    pub fn pause(&mut self) {
+        if let Some(ref stream) = self.mic_stream {
+            let _ = stream.pause();
+        }
+        if let Some(ref stream) = self.loopback_stream {
+            let _ = stream.pause();
+        }
+        self.running.store(false, Ordering::Relaxed);
+    }
+
+    pub fn resume(&mut self) {
+        if let Some(ref stream) = self.mic_stream {
+            let _ = stream.play();
+        }
+        if let Some(ref stream) = self.loopback_stream {
+            let _ = stream.play();
+        }
+        self.running.store(true, Ordering::Relaxed);
+    }
+
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::Relaxed)
     }
@@ -197,4 +217,20 @@ impl Drop for AudioCapture {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// Lista dispositivos de entrada (microfones)
+pub fn list_input_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    host.input_devices()
+        .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
+        .unwrap_or_default()
+}
+
+/// Lista dispositivos de saída (auto-falantes)
+pub fn list_output_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    host.output_devices()
+        .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
+        .unwrap_or_default()
 }

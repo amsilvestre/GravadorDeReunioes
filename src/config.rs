@@ -6,8 +6,12 @@ use std::path::PathBuf;
 pub struct AppConfig {
     /// 0 = Cloud (OpenAI), 1 = Local (Whisper)
     pub engine: i32,
+    /// 0 = Claro, 1 = Escuro
+    pub theme_index: i32,
     /// Indice do modelo local: 0=tiny, 1=base, 2=small, 3=medium, 4=large
     pub model_index: i32,
+    /// Indice do idioma: 0=pt, 1=en, 2=es, etc
+    pub language_index: i32,
     /// Chave API da OpenAI
     pub api_key: String,
     /// Diretorio de saida para gravacoes
@@ -28,6 +32,16 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(2); // default: small
 
+        let theme_index = db
+            .get_config("theme_index")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        let language_index = db
+            .get_config("language_index")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0); // default: Portuguese
+
         let api_key = db.get_config("api_key")?.unwrap_or_default();
 
         let default_output = Self::default_output_dir()?;
@@ -44,7 +58,9 @@ impl AppConfig {
 
         Ok(Self {
             engine,
+            theme_index,
             model_index,
+            language_index,
             api_key,
             output_dir,
             models_dir,
@@ -53,7 +69,9 @@ impl AppConfig {
 
     pub fn save(&self, db: &Database) -> Result<()> {
         db.set_config("engine", &self.engine.to_string())?;
+        db.set_config("theme_index", &self.theme_index.to_string())?;
         db.set_config("model_index", &self.model_index.to_string())?;
+        db.set_config("language_index", &self.language_index.to_string())?;
         db.set_config("api_key", &self.api_key)?;
         db.set_config("output_dir", &self.output_dir.to_string_lossy())?;
         Ok(())
@@ -66,8 +84,9 @@ impl AppConfig {
     }
 
     fn default_models_dir() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Nao foi possivel encontrar o diretorio de configuracao"))?;
+        let config_dir = dirs::config_dir().ok_or_else(|| {
+            anyhow::anyhow!("Nao foi possivel encontrar o diretorio de configuracao")
+        })?;
         Ok(config_dir.join("GravadorDeReunioes").join("models"))
     }
 
@@ -79,6 +98,20 @@ impl AppConfig {
             3 => "medium",
             4 => "large",
             _ => "small",
+        }
+    }
+
+    pub fn language_code(&self) -> Option<String> {
+        match self.language_index {
+            0 => Some("pt".to_string()), // Portuguese
+            1 => Some("en".to_string()), // English
+            2 => Some("es".to_string()), // Spanish
+            3 => Some("fr".to_string()), // French
+            4 => Some("de".to_string()), // German
+            5 => Some("it".to_string()), // Italian
+            6 => Some("ja".to_string()), // Japanese
+            7 => Some("zh".to_string()), // Chinese
+            _ => None,                   // Auto-detect
         }
     }
 }

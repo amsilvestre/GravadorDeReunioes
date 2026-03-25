@@ -23,6 +23,7 @@ num_cpus = "1"
 arboard = "3"
 reqwest = { version = "0.12", features = ["stream"] }
 futures-util = "0.3"
+winrt-notification = "0.5"
 
 [build-dependencies]
 slint-build = "1"

@@ -3,12 +3,23 @@ use crate::audio::mixer::Mixer;
 use crate::audio::wav_writer::WavFileWriter;
 use crate::config::AppConfig;
 use crate::db::Database;
+use crate::AppStyle;
 use crate::AppWindow;
 use anyhow::Result;
 use arboard;
 use slint::ComponentHandle;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+
+fn send_notification(title: &str, message: &str) {
+    if let Ok(notification) = winrt_notification::Toast::new("AMS Gravador")
+        .title(title)
+        .text1(message)
+        .show()
+    {
+        let _ = notification;
+    }
+}
 
 pub struct AppState {
     pub config: AppConfig,
@@ -29,11 +40,21 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
 
     // Flag compartilhada para controle de gravacao
     let recording_flag = Arc::new(AtomicBool::new(false));
+    let paused_flag = Arc::new(AtomicBool::new(false));
+
+    // Clones para uso nos callbacks
+    let paused_flag_for_start = paused_flag.clone();
+    let paused_flag_for_pause = paused_flag.clone();
+    let paused_flag_for_resume = paused_flag.clone();
 
     // Carrega configuracoes na UI
     app.set_engine_index(config.engine);
+    app.set_theme_index(config.theme_index);
     app.set_model_index(config.model_index);
+    app.set_language_index(config.language_index);
     app.set_api_key(config.api_key.into());
+    app.global::<AppStyle>()
+        .set_dark_theme(config.theme_index == 1);
 
     // === Callback: Iniciar gravacao ===
     let state_clone = state.clone();
@@ -43,12 +64,25 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let state = state_clone.clone();
         let app_weak = app_weak.clone();
         let recording_flag = recording_flag_clone.clone();
+        let paused_flag = paused_flag_for_start.clone();
+        let delay_index = if let Some(app) = app_weak.upgrade() {
+            app.get_recording_delay_index()
+        } else {
+            0
+        };
+        let delay_secs = match delay_index {
+            1 => 10,
+            2 => 30,
+            3 => 60,
+            _ => 0,
+        };
 
         // Evita iniciar se ja esta gravando
         if recording_flag.load(Ordering::Relaxed) {
             return;
         }
         recording_flag.store(true, Ordering::Relaxed);
+        paused_flag.store(false, Ordering::Relaxed);
 
         std::thread::spawn(move || {
             // Gera nome do arquivo e registra no banco
@@ -70,9 +104,30 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
             // Atualiza UI: gravando
             let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
                 app.set_is_recording(true);
-                app.set_recording_status("Iniciando captura de audio...".into());
+                app.set_is_paused(false);
+                app.set_recording_duration("00:00:00".into());
+                app.set_recording_status("Preparando gravação...".into());
                 app.set_has_recording(false);
             });
+
+            if delay_secs > 0 {
+                for remaining in (1..=delay_secs).rev() {
+                    if !recording_flag.load(Ordering::Relaxed) {
+                        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                            app.set_is_recording(false);
+                            app.set_recording_status("Gravação cancelada".into());
+                        });
+                        return;
+                    }
+
+                    let status: slint::SharedString =
+                        format!("Iniciando gravação em {}s...", remaining).into();
+                    let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                        app.set_recording_status(status);
+                    });
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            }
 
             // Inicia captura de audio
             let capture_result = AudioCapture::start();
@@ -112,14 +167,15 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
 
             // Loop de gravacao
             let start = std::time::Instant::now();
+            let paused = paused_flag.clone();
             while recording_flag.load(Ordering::Relaxed) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
 
                 // Le e mixa audio
                 let output = mixer.read_and_mix();
 
-                // Escreve no WAV
-                if !output.samples.is_empty() {
+                // Escreve no WAV apenas se nao estiver pausado
+                if !paused.load(Ordering::Relaxed) && !output.samples.is_empty() {
                     if let Err(e) = wav_writer.write_samples(&output.samples) {
                         eprintln!("Erro ao escrever WAV: {}", e);
                         break;
@@ -134,13 +190,19 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 let s = secs % 60;
                 let duration_str: slint::SharedString =
                     format!("{:02}:{:02}:{:02}", h, m, s).into();
-                let level = output.rms_level.min(1.0);
+                let level = if paused.load(Ordering::Relaxed) {
+                    0.0
+                } else {
+                    output.rms_level.min(1.0)
+                };
 
                 let app_weak = app_weak.clone();
+                let is_paused = paused.load(Ordering::Relaxed);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = app_weak.upgrade() {
                         app.set_recording_duration(duration_str);
                         app.set_audio_level(level);
+                        app.set_is_paused(is_paused);
                     }
                 });
             }
@@ -167,6 +229,9 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 app.set_has_recording(true);
                 app.set_audio_level(0.0);
             });
+
+            // Notificacao
+            send_notification("Gravação Finalizada", "A gravação foi salva com sucesso.");
         });
     });
 
@@ -174,6 +239,28 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     let recording_flag_clone = recording_flag.clone();
     app.on_stop_recording(move || {
         recording_flag_clone.store(false, Ordering::Relaxed);
+    });
+
+    // === Callback: Pausar gravacao ===
+    let paused_flag_pause = paused_flag_for_pause.clone();
+    let app_weak_pause = app.as_weak();
+    app.on_pause_recording(move || {
+        paused_flag_pause.store(true, Ordering::Relaxed);
+        let _ = app_weak_pause.upgrade_in_event_loop(|app: AppWindow| {
+            app.set_is_paused(true);
+            app.set_recording_status("Gravação pausada".into());
+        });
+    });
+
+    // === Callback: Retomar gravacao ===
+    let paused_flag_resume = paused_flag_for_resume.clone();
+    let app_weak_resume = app.as_weak();
+    app.on_resume_recording(move || {
+        paused_flag_resume.store(false, Ordering::Relaxed);
+        let _ = app_weak_resume.upgrade_in_event_loop(|app: AppWindow| {
+            app.set_is_paused(false);
+            app.set_recording_status("Gravando...".into());
+        });
     });
 
     // === Callback: Transcrever ===
@@ -184,7 +271,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let app_weak = app_weak.clone();
 
         std::thread::spawn(move || {
-            let (wav_path, engine_type, api_key, models_dir, model_name) = {
+            let (wav_path, engine_type, api_key, models_dir, model_name, language_code) = {
                 let s = state.lock().unwrap();
                 let wav_path = match &s.current_recording_path {
                     Some(p) => p.clone(),
@@ -217,7 +304,8 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 let api_key = s.config.api_key.clone();
                 let model_name = s.config.model_name().to_string();
                 let models_dir = s.config.models_dir.clone();
-                (wav_path, engine, api_key, models_dir, model_name)
+                let language_code = s.config.language_code();
+                (wav_path, engine, api_key, models_dir, model_name, language_code)
             };
 
             // Atualiza UI: transcrevendo
@@ -260,7 +348,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         });
                     });
                     let engine = crate::transcription::cloud::CloudEngine::new(api_key);
-                    engine.transcribe(&wav_path, on_progress)
+                    engine.transcribe(&wav_path, language_code.as_deref(), on_progress)
                 }
             } else {
                 // Local (whisper-rs) — verifica/baixa modelo primeiro
@@ -313,7 +401,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                             });
                         });
                         let engine = crate::transcription::local::LocalEngine::new(path);
-                        engine.transcribe(&wav_path, on_progress)
+                        engine.transcribe(&wav_path, language_code.as_deref(), on_progress)
                     }
                 }
             };
@@ -359,13 +447,21 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         app.set_transcription_status("Transcricao concluida".into());
                         app.set_transcription_segments(model.into());
                     });
+                    
+                    // Notificacao
+                    send_notification("Transcrição Concluída", "A transcrição do áudio foi concluída.");
                 }
                 Err(e) => {
                     let err_msg: slint::SharedString = format!("Erro: {}", e).into();
+                    let err_msg_clone = err_msg.clone();
                     let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
                         app.set_is_transcribing(false);
-                        app.set_transcription_status(err_msg);
+                        app.set_transcription_status(err_msg_clone);
                     });
+                    
+                    // Notificacao de erro
+                    let err_str = format!("Erro: {}", e);
+                    send_notification("Erro na Transcrição", &err_str);
                 }
             }
         });
@@ -429,7 +525,9 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         if let Some(app) = app_weak.upgrade() {
             let mut s = state_clone.lock().unwrap();
             s.config.engine = app.get_engine_index();
+            s.config.theme_index = app.get_theme_index();
             s.config.model_index = app.get_model_index();
+            s.config.language_index = app.get_language_index();
             s.config.api_key = app.get_api_key().to_string();
 
             if let Err(e) = s.config.save(&s.db) {
@@ -441,7 +539,14 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     // Callbacks de settings (salvos ao clicar "Salvar")
     app.on_api_key_changed(move |_key| {});
     app.on_engine_changed(move |_idx| {});
+    let app_weak_theme = app.as_weak();
+    app.on_theme_changed(move |idx| {
+        if let Some(app) = app_weak_theme.upgrade() {
+            app.global::<AppStyle>().set_dark_theme(idx == 1);
+        }
+    });
     app.on_model_changed(move |_idx| {});
+    app.on_language_changed(move |_idx| {});
 
     // === Callback: Carregar historico ===
     let state_clone = state.clone();
