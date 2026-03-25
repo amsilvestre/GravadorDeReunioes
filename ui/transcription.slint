@@ -1,0 +1,117 @@
+import { Button, VerticalBox, HorizontalBox, ScrollView, ComboBox, ProgressIndicator } from "std-widgets.slint";
+import { AppStyle } from "style.slint";
+
+export struct TranscriptionSegment {
+    timestamp: string,
+    text: string,
+}
+
+export component TranscriptionPanel inherits Rectangle {
+    background: AppStyle.bg-surface;
+    border-radius: AppStyle.border-radius;
+
+    // Propriedades de entrada
+    in property <string> engine: "cloud";
+    in property <[TranscriptionSegment]> segments: [];
+    in property <float> progress: 0.0;
+    in property <bool> is-transcribing: false;
+    in property <string> status-text: "";
+    in property <bool> has-recording: false;
+
+    // Callbacks
+    callback transcribe();
+    callback copy-to-clipboard();
+    callback export-text();
+
+    VerticalBox {
+        padding: AppStyle.spacing;
+        spacing: AppStyle.spacing;
+
+        // Cabecalho
+        HorizontalBox {
+            spacing: AppStyle.spacing;
+            alignment: start;
+
+            Text {
+                text: "Transcricao";
+                font-size: 20px;
+                font-weight: 600;
+                color: AppStyle.text-primary;
+                vertical-alignment: center;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            if root.has-recording && !root.is-transcribing: Button {
+                text: "Transcrever";
+                primary: true;
+                clicked => { root.transcribe(); }
+            }
+
+            if root.segments.length > 0: Button {
+                text: "Copiar";
+                clicked => { root.copy-to-clipboard(); }
+            }
+
+            if root.segments.length > 0: Button {
+                text: "Exportar";
+                clicked => { root.export-text(); }
+            }
+        }
+
+        // Texto de status (sempre visivel quando houver mensagem)
+        if root.status-text != "": Text {
+            text: root.status-text;
+            font-size: 14px;
+            color: AppStyle.text-secondary;
+        }
+
+        // Barra de progresso durante transcricao
+        if is-transcribing: ProgressIndicator {
+            progress: root.progress;
+            height: 6px;
+        }
+
+        // Lista de segmentos transcritos
+        if root.segments.length > 0: ScrollView {
+            vertical-stretch: 1;
+
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                for segment in root.segments: HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+
+                    Text {
+                        text: segment.timestamp;
+                        font-size: 12px;
+                        color: AppStyle.primary;
+                        font-weight: 600;
+                        width: 60px;
+                    }
+
+                    Text {
+                        text: segment.text;
+                        font-size: 14px;
+                        color: AppStyle.text-primary;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                    }
+                }
+            }
+        }
+
+        // Placeholder quando nao ha transcricao e sem status
+        if root.segments.length == 0 && !root.is-transcribing && root.status-text == "": Rectangle {
+            vertical-stretch: 1;
+
+            Text {
+                text: root.has-recording ? "Clique em 'Transcrever' para iniciar" : "Grave uma reuniao primeiro";
+                font-size: 14px;
+                color: AppStyle.text-secondary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}

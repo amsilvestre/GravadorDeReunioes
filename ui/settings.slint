@@ -1,0 +1,107 @@
+import { Button, VerticalBox, HorizontalBox, ComboBox, LineEdit, Switch } from "std-widgets.slint";
+import { AppStyle } from "style.slint";
+
+export component SettingsPanel inherits Rectangle {
+    background: AppStyle.bg-surface;
+    border-radius: AppStyle.border-radius;
+
+    // Propriedades
+    in-out property <int> engine-index: 0;  // 0 = Cloud, 1 = Local
+    in-out property <int> model-index: 0;
+    in-out property <string> api-key: "";
+    in property <[string]> available-models: ["tiny", "base", "small", "medium", "large"];
+    in property <[string]> engine-options: ["Cloud (OpenAI)", "Local (Whisper)"];
+
+    // Callbacks
+    callback save-settings();
+    callback api-key-changed(string);
+    callback engine-changed(int);
+    callback model-changed(int);
+
+    VerticalBox {
+        padding: AppStyle.spacing;
+        spacing: AppStyle.spacing;
+
+        Text {
+            text: "Configuracoes";
+            font-size: 20px;
+            font-weight: 600;
+            color: AppStyle.text-primary;
+        }
+
+        // Engine de transcricao
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Motor de Transcricao";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.engine-options;
+                current-index <=> root.engine-index;
+                selected(value) => { root.engine-changed(self.current-index); }
+            }
+        }
+
+        // API Key (so mostra se engine = cloud)
+        if engine-index == 0: VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Chave API OpenAI";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            LineEdit {
+                text <=> root.api-key;
+                placeholder-text: "sk-...";
+                input-type: password;
+                edited(value) => { root.api-key-changed(value); }
+            }
+        }
+
+        // Modelo local (so mostra se engine = local)
+        if engine-index == 1: VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Modelo Whisper";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.available-models;
+                current-index <=> root.model-index;
+                selected(value) => { root.model-changed(self.current-index); }
+            }
+
+            Text {
+                text: "Modelos maiores sao mais precisos, mas mais lentos em CPU.";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
+                wrap: word-wrap;
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+
+        // Botao salvar
+        HorizontalBox {
+            alignment: end;
+
+            Button {
+                text: "Salvar";
+                primary: true;
+                clicked => { root.save-settings(); }
+            }
+        }
+    }
+}

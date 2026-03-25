@@ -1,0 +1,167 @@
+import { Button, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { AppStyle } from "style.slint";
+
+export struct RecordingItem {
+    id: int,
+    name: string,
+    date: string,
+    duration: string,
+    status: string,   // "none" | "done" | "error"
+}
+
+export component HistoryPanel inherits Rectangle {
+    background: AppStyle.bg-surface;
+    border-radius: AppStyle.border-radius;
+
+    in property <[RecordingItem]> recordings: [];
+    in-out property <int> selected-id: -1;
+
+    callback refresh();
+    callback load-recording(int);
+
+    VerticalBox {
+        padding: AppStyle.spacing;
+        spacing: AppStyle.spacing;
+
+        // Cabecalho
+        HorizontalBox {
+            spacing: AppStyle.spacing;
+            alignment: start;
+
+            Text {
+                text: "Historico";
+                font-size: 20px;
+                font-weight: 600;
+                color: AppStyle.text-primary;
+                vertical-alignment: center;
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            Button {
+                text: "Atualizar";
+                clicked => { root.refresh(); }
+            }
+        }
+
+        // Lista de gravacoes
+        if root.recordings.length > 0: ScrollView {
+            vertical-stretch: 1;
+
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                for rec in root.recordings: Rectangle {
+                    height: 64px;
+                    border-radius: 6px;
+                    background: rec.id == root.selected-id
+                        ? AppStyle.primary-light.with-alpha(0.15)
+                        : AppStyle.bg-main;
+                    border-width: rec.id == root.selected-id ? 2px : 1px;
+                    border-color: rec.id == root.selected-id
+                        ? AppStyle.primary
+                        : #E0E0E0;
+
+                    TouchArea {
+                        clicked => { root.selected-id = rec.id; }
+                    }
+
+                    HorizontalBox {
+                        padding: AppStyle.spacing-small;
+                        spacing: AppStyle.spacing-small;
+                        alignment: start;
+
+                        // Indicador de status
+                        Rectangle {
+                            width: 10px;
+                            height: 10px;
+                            border-radius: 5px;
+                            y: (parent.height - self.height) / 2;
+                            background: rec.status == "done"
+                                ? AppStyle.success-green
+                                : rec.status == "error"
+                                    ? AppStyle.recording-red
+                                    : AppStyle.warning-yellow;
+                        }
+
+                        VerticalBox {
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+
+                            Text {
+                                text: rec.name;
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: AppStyle.text-primary;
+                                overflow: elide;
+                            }
+
+                            HorizontalBox {
+                                spacing: AppStyle.spacing-small;
+                                alignment: start;
+
+                                Text {
+                                    text: rec.date;
+                                    font-size: 11px;
+                                    color: AppStyle.text-secondary;
+                                }
+
+                                Text {
+                                    text: "•";
+                                    font-size: 11px;
+                                    color: AppStyle.text-secondary;
+                                }
+
+                                Text {
+                                    text: rec.duration;
+                                    font-size: 11px;
+                                    color: AppStyle.text-secondary;
+                                }
+
+                                Text {
+                                    text: "•";
+                                    font-size: 11px;
+                                    color: AppStyle.text-secondary;
+                                }
+
+                                Text {
+                                    text: rec.status == "done"
+                                        ? "Transcrito"
+                                        : rec.status == "error"
+                                            ? "Erro"
+                                            : "Pendente";
+                                    font-size: 11px;
+                                    color: rec.status == "done"
+                                        ? AppStyle.success-green
+                                        : rec.status == "error"
+                                            ? AppStyle.recording-red
+                                            : AppStyle.warning-yellow;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Placeholder quando sem gravacoes
+        if root.recordings.length == 0: Rectangle {
+            vertical-stretch: 1;
+
+            Text {
+                text: "Nenhuma gravacao encontrada";
+                font-size: 14px;
+                color: AppStyle.text-secondary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // Botao de carregar
+        if root.selected-id >= 0: Button {
+            text: "Carregar Gravacao Selecionada";
+            primary: true;
+            clicked => { root.load-recording(root.selected-id); }
+        }
+    }
+}

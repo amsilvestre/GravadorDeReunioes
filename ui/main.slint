@@ -1,0 +1,196 @@
+import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { AppStyle } from "style.slint";
+import { RecordingPanel } from "recording.slint";
+import { TranscriptionPanel, TranscriptionSegment } from "transcription.slint";
+import { SettingsPanel } from "settings.slint";
+import { HistoryPanel, RecordingItem } from "history.slint";
+
+export { TranscriptionSegment }
+export { RecordingItem }
+
+component SidebarButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: false;
+    in property <image> icon;
+
+    callback clicked();
+
+    height: 48px;
+    background: touch.has-hover ? AppStyle.bg-sidebar-hover :
+                active ? AppStyle.bg-sidebar-hover : transparent;
+    border-radius: AppStyle.border-radius;
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalBox {
+        padding-left: AppStyle.spacing;
+        padding-right: AppStyle.spacing;
+        alignment: start;
+        spacing: AppStyle.spacing-small;
+
+        Text {
+            text: root.label;
+            font-size: 14px;
+            color: root.active ? AppStyle.text-on-primary : AppStyle.text-on-sidebar;
+            vertical-alignment: center;
+            font-weight: root.active ? 600 : 400;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Gravador de Reunioes";
+    preferred-width: 900px;
+    preferred-height: 600px;
+    background: AppStyle.bg-main;
+
+    // Estado da pagina ativa: 0=Gravar, 1=Historico, 2=Config
+    in-out property <int> active-page: 0;
+
+    // === Propriedades de gravacao ===
+    in property <bool> is-recording: false;
+    in property <string> recording-duration: "00:00:00";
+    in property <float> audio-level: 0.0;
+    in property <string> recording-status: "Pronto para gravar";
+
+    // === Propriedades de transcricao ===
+    in property <string> transcription-engine: "cloud";
+    in property <[TranscriptionSegment]> transcription-segments: [];
+    in property <float> transcription-progress: 0.0;
+    in property <bool> is-transcribing: false;
+    in property <string> transcription-status: "";
+    in property <bool> has-recording: false;
+
+    // === Propriedades de configuracao ===
+    in-out property <int> engine-index: 0;
+    in-out property <int> model-index: 0;
+    in-out property <string> api-key: "";
+
+    // === Propriedades de historico ===
+    in property <[RecordingItem]> recordings: [];
+    in-out property <int> selected-recording-id: -1;
+
+    // === Callbacks ===
+    callback start-recording();
+    callback stop-recording();
+    callback transcribe();
+    callback copy-to-clipboard();
+    callback export-text();
+    callback save-settings();
+    callback api-key-changed(string);
+    callback engine-changed(int);
+    callback model-changed(int);
+    callback load-recordings();
+    callback select-recording(int);
+
+    HorizontalBox {
+        // Sidebar
+        Rectangle {
+            width: AppStyle.sidebar-width;
+            background: AppStyle.bg-sidebar;
+
+            VerticalBox {
+                padding: AppStyle.spacing-small;
+                spacing: 4px;
+
+                // Logo / Titulo
+                Text {
+                    text: "Gravador";
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: AppStyle.text-on-primary;
+                    horizontal-alignment: center;
+                    height: 60px;
+                    vertical-alignment: center;
+                }
+
+                SidebarButton {
+                    label: "Gravar";
+                    active: root.active-page == 0;
+                    clicked => { root.active-page = 0; }
+                }
+
+                SidebarButton {
+                    label: "Historico";
+                    active: root.active-page == 1;
+                    clicked => { root.active-page = 1; }
+                }
+
+                SidebarButton {
+                    label: "Configuracoes";
+                    active: root.active-page == 2;
+                    clicked => { root.active-page = 2; }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Indicador de status no rodape da sidebar
+                Text {
+                    text: root.is-recording ? "Gravando..." : "Ocioso";
+                    font-size: 11px;
+                    color: root.is-recording ? AppStyle.recording-red : AppStyle.text-on-sidebar;
+                    horizontal-alignment: center;
+                    height: 32px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Area de conteudo principal
+        Rectangle {
+            horizontal-stretch: 1;
+
+            VerticalBox {
+                padding: AppStyle.spacing;
+                spacing: AppStyle.spacing;
+
+                // Pagina de gravacao
+                if root.active-page == 0: VerticalBox {
+                    spacing: AppStyle.spacing;
+
+                    rec := RecordingPanel {
+                        is-recording: root.is-recording;
+                        duration: root.recording-duration;
+                        audio-level: root.audio-level;
+                        status-text: root.recording-status;
+                        start-recording => { root.start-recording(); }
+                        stop-recording => { root.stop-recording(); }
+                    }
+
+                    trans := TranscriptionPanel {
+                        segments: root.transcription-segments;
+                        progress: root.transcription-progress;
+                        is-transcribing: root.is-transcribing;
+                        status-text: root.transcription-status;
+                        has-recording: root.has-recording;
+                        transcribe => { root.transcribe(); }
+                        copy-to-clipboard => { root.copy-to-clipboard(); }
+                        export-text => { root.export-text(); }
+                    }
+                }
+
+                // Pagina de historico
+                if root.active-page == 1: HistoryPanel {
+                    vertical-stretch: 1;
+                    recordings: root.recordings;
+                    selected-id <=> root.selected-recording-id;
+                    refresh => { root.load-recordings(); }
+                    load-recording(id) => { root.select-recording(id); }
+                }
+
+                // Pagina de configuracoes
+                if root.active-page == 2: SettingsPanel {
+                    engine-index <=> root.engine-index;
+                    model-index <=> root.model-index;
+                    api-key <=> root.api-key;
+                    save-settings => { root.save-settings(); }
+                    api-key-changed(key) => { root.api-key-changed(key); }
+                    engine-changed(idx) => { root.engine-changed(idx); }
+                    model-changed(idx) => { root.model-changed(idx); }
+                }
+            }
+        }
+    }
+}

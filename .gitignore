@@ -1,0 +1,7 @@
+/target
+/models/
+/recordings/
+*.wav
+*.bin
+.claude/memory/
+.claude/plans/

@@ -1,0 +1,95 @@
+import { Button, VerticalBox, HorizontalBox, ProgressIndicator } from "std-widgets.slint";
+import { AppStyle } from "style.slint";
+
+export component RecordingPanel inherits Rectangle {
+    background: AppStyle.bg-surface;
+    border-radius: AppStyle.border-radius;
+
+    // Propriedades de entrada (Rust -> UI)
+    in property <bool> is-recording: false;
+    in property <string> duration: "00:00:00";
+    in property <float> audio-level: 0.0;
+    in property <string> status-text: "Pronto para gravar";
+
+    // Callbacks (UI -> Rust)
+    callback start-recording();
+    callback stop-recording();
+
+    VerticalBox {
+        padding: AppStyle.spacing;
+        spacing: AppStyle.spacing;
+
+        // Status da gravacao
+        HorizontalBox {
+            alignment: center;
+            spacing: AppStyle.spacing-small;
+
+            // Indicador de gravacao (bolinha vermelha)
+            if is-recording: Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: AppStyle.recording-red;
+
+                animate background {
+                    duration: 800ms;
+                    easing: ease-in-out;
+                }
+            }
+
+            Text {
+                text: root.status-text;
+                font-size: 16px;
+                color: is-recording ? AppStyle.recording-red : AppStyle.text-secondary;
+                vertical-alignment: center;
+            }
+        }
+
+        // Timer
+        Text {
+            text: root.duration;
+            font-size: 48px;
+            font-weight: 300;
+            color: AppStyle.text-primary;
+            horizontal-alignment: center;
+        }
+
+        // Medidor de nivel de audio
+        Rectangle {
+            height: 8px;
+            border-radius: 4px;
+            background: #E0E0E0;
+
+            Rectangle {
+                width: parent.width * clamp(root.audio-level, 0, 1);
+                height: parent.height;
+                border-radius: parent.border-radius;
+                background: root.audio-level > 0.8 ? AppStyle.recording-red :
+                            root.audio-level > 0.5 ? AppStyle.warning-yellow :
+                            AppStyle.success-green;
+
+                animate width {
+                    duration: 100ms;
+                    easing: ease-out;
+                }
+            }
+        }
+
+        // Botoes de controle
+        HorizontalBox {
+            alignment: center;
+            spacing: AppStyle.spacing;
+
+            if !is-recording: Button {
+                text: "Iniciar Gravacao";
+                primary: true;
+                clicked => { root.start-recording(); }
+            }
+
+            if is-recording: Button {
+                text: "Parar Gravacao";
+                clicked => { root.stop-recording(); }
+            }
+        }
+    }
+}
