@@ -24,6 +24,16 @@ component SidebarButton inherits Rectangle {
         clicked => { root.clicked(); }
     }
 
+    // Indicador lateral esquerdo quando ativo
+    if root.active: Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: 24px;
+        border-radius: 2px;
+        background: AppStyle.primary-light;
+    }
+
     HorizontalBox {
         padding-left: AppStyle.spacing;
         padding-right: AppStyle.spacing;
@@ -41,13 +51,17 @@ component SidebarButton inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "Gravador de Reunioes";
-    preferred-width: 900px;
-    preferred-height: 600px;
+    title: "AMS Gravador de reuniões";
+    icon: @image-url("app.ico");
+    preferred-width: 1000px;
+    preferred-height: 680px;
     background: AppStyle.bg-main;
 
     // Estado da pagina ativa: 0=Gravar, 1=Historico, 2=Config
     in-out property <int> active-page: 0;
+
+    // Controle do dialogo Sobre
+    private property <bool> show-about: false;
 
     // === Propriedades de gravacao ===
     in property <bool> is-recording: false;
@@ -84,6 +98,8 @@ export component AppWindow inherits Window {
     callback model-changed(int);
     callback load-recordings();
     callback select-recording(int);
+    callback delete-recording(int);
+    callback rename-recording(int, string);
 
     HorizontalBox {
         // Sidebar
@@ -96,14 +112,28 @@ export component AppWindow inherits Window {
                 spacing: 4px;
 
                 // Logo / Titulo
-                Text {
-                    text: "Gravador";
-                    font-size: 20px;
-                    font-weight: 700;
-                    color: AppStyle.text-on-primary;
-                    horizontal-alignment: center;
-                    height: 60px;
-                    vertical-alignment: center;
+                VerticalBox {
+                    height: 72px;
+                    spacing: 0px;
+                    padding: 0px;
+                    alignment: center;
+
+                    Text {
+                        text: "AMS";
+                        font-size: 13px;
+                        font-weight: 400;
+                        color: AppStyle.primary-light;
+                        horizontal-alignment: center;
+                        letter-spacing: 3px;
+                    }
+
+                    Text {
+                        text: "Gravador";
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: AppStyle.text-on-primary;
+                        horizontal-alignment: center;
+                    }
                 }
 
                 SidebarButton {
@@ -132,8 +162,29 @@ export component AppWindow inherits Window {
                     font-size: 11px;
                     color: root.is-recording ? AppStyle.recording-red : AppStyle.text-on-sidebar;
                     horizontal-alignment: center;
-                    height: 32px;
+                    height: 24px;
                     vertical-alignment: center;
+                }
+
+                // Botao Sobre
+                Rectangle {
+                    height: 36px;
+                    border-radius: AppStyle.border-radius-small;
+                    background: about-touch.has-hover
+                        ? AppStyle.bg-sidebar-hover
+                        : transparent;
+
+                    about-touch := TouchArea {
+                        clicked => { root.show-about = true; }
+                    }
+
+                    Text {
+                        text: "Sobre";
+                        font-size: 12px;
+                        color: #9E9EBE;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
                 }
             }
         }
@@ -149,6 +200,7 @@ export component AppWindow inherits Window {
                 // Pagina de gravacao
                 if root.active-page == 0: VerticalBox {
                     spacing: AppStyle.spacing;
+                    vertical-stretch: 1;
 
                     rec := RecordingPanel {
                         is-recording: root.is-recording;
@@ -160,6 +212,7 @@ export component AppWindow inherits Window {
                     }
 
                     trans := TranscriptionPanel {
+                        vertical-stretch: 1;
                         segments: root.transcription-segments;
                         progress: root.transcription-progress;
                         is-transcribing: root.is-transcribing;
@@ -178,6 +231,8 @@ export component AppWindow inherits Window {
                     selected-id <=> root.selected-recording-id;
                     refresh => { root.load-recordings(); }
                     load-recording(id) => { root.select-recording(id); }
+                    delete-recording(id) => { root.delete-recording(id); }
+                    rename-recording(id, name) => { root.rename-recording(id, name); }
                 }
 
                 // Pagina de configuracoes
@@ -189,6 +244,158 @@ export component AppWindow inherits Window {
                     api-key-changed(key) => { root.api-key-changed(key); }
                     engine-changed(idx) => { root.engine-changed(idx); }
                     model-changed(idx) => { root.model-changed(idx); }
+                }
+            }
+        }
+    }
+
+    // === Dialogo "Sobre" (overlay) ===
+    if root.show-about: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: #00000080;
+
+        // Fecha ao clicar no fundo
+        TouchArea {
+            clicked => { root.show-about = false; }
+        }
+
+        // Card central
+        Rectangle {
+            width: 460px;
+            height: 360px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: AppStyle.bg-surface;
+            border-radius: AppStyle.border-radius;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000040;
+            drop-shadow-offset-y: 8px;
+
+            // Impede que cliques no card fechem o dialogo
+            TouchArea {}
+
+            VerticalBox {
+                padding: 32px;
+                spacing: AppStyle.spacing;
+                alignment: start;
+
+                // Cabecalho
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    alignment: start;
+
+                    // Icone decorativo
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: AppStyle.primary;
+
+                        Text {
+                            text: "🎙";
+                            font-size: 20px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    VerticalBox {
+                        spacing: 2px;
+                        padding: 0px;
+                        alignment: center;
+
+                        Text {
+                            text: "AMS Gravador de reuniões";
+                            font-size: 17px;
+                            font-weight: 700;
+                            color: AppStyle.text-primary;
+                        }
+
+                        Text {
+                            text: "Versao 1.0";
+                            font-size: 12px;
+                            color: AppStyle.text-secondary;
+                        }
+                    }
+                }
+
+                // Divisor
+                Rectangle {
+                    height: 1px;
+                    background: AppStyle.divider;
+                }
+
+                // Descricao
+                Text {
+                    text: "Programa para gravar reuniões ou áudio do microfone e transcrever para texto usando Whisper (Local ou Cloud).";
+                    font-size: 13px;
+                    color: AppStyle.text-primary;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "Transcrição disponível em:";
+                    font-size: 13px;
+                    color: AppStyle.text-primary;
+                    wrap: word-wrap;
+                }
+
+                // Bullets de engines
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    padding-left: 8px;
+
+                    Rectangle {
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: AppStyle.primary;
+                        y: 6px;
+                    }
+
+                    Text {
+                        text: "Whisper Cloud — OpenAI API (requer chave de API)";
+                        font-size: 13px;
+                        color: AppStyle.text-secondary;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    padding-left: 8px;
+
+                    Rectangle {
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 3px;
+                        background: AppStyle.primary;
+                        y: 6px;
+                    }
+
+                    Text {
+                        text: "Whisper Local — Modelos rodando na CPU, sem internet";
+                        font-size: 13px;
+                        color: AppStyle.text-secondary;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                    }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Botao fechar
+                HorizontalBox {
+                    alignment: end;
+
+                    Button {
+                        text: "Fechar";
+                        clicked => { root.show-about = false; }
+                    }
                 }
             }
         }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
@@ -89,8 +91,12 @@ impl AudioCapture {
         )?;
 
         // Inicia ambos os streams
-        mic_stream.play().context("Falha ao iniciar stream do microfone")?;
-        loopback_stream.play().context("Falha ao iniciar stream do loopback")?;
+        mic_stream
+            .play()
+            .context("Falha ao iniciar stream do microfone")?;
+        loopback_stream
+            .play()
+            .context("Falha ao iniciar stream do loopback")?;
 
         let capture = Self {
             mic_stream: Some(mic_stream),

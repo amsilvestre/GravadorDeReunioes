@@ -1,4 +1,3 @@
-use arboard;
 use crate::audio::capture::AudioCapture;
 use crate::audio::mixer::Mixer;
 use crate::audio::wav_writer::WavFileWriter;
@@ -6,6 +5,7 @@ use crate::config::AppConfig;
 use crate::db::Database;
 use crate::AppWindow;
 use anyhow::Result;
+use arboard;
 use slint::ComponentHandle;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -60,7 +60,9 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 s.current_recording_path = Some(file_path.clone());
 
                 let created_at = now.to_rfc3339();
-                let id = s.db.add_recording(&file_path.to_string_lossy(), &created_at).ok();
+                let id =
+                    s.db.add_recording(&file_path.to_string_lossy(), &created_at)
+                        .ok();
                 s.current_recording_id = id;
                 (file_path, id)
             };
@@ -88,9 +90,9 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 }
             };
 
-            // Configura mixer — usa sample rate do loopback como referencia
-            let target_sr = handles.loopback_config.sample_rate;
-            let target_ch: u16 = 1; // mono para transcricao
+            // Configura mixer — 16kHz mono (mesma qualidade do Whisper)
+            let target_sr: u32 = 16000;
+            let target_ch: u16 = 1;
             let mut mixer = Mixer::new(handles, target_sr, target_ch);
 
             // Cria WAV writer
@@ -375,7 +377,10 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     app.on_export_text(move || {
         let (text, wav_path) = {
             let s = state_clone.lock().unwrap();
-            (s.last_transcription_text.clone(), s.current_recording_path.clone())
+            (
+                s.last_transcription_text.clone(),
+                s.current_recording_path.clone(),
+            )
         };
         let app_weak = app_weak.clone();
         if let (Some(text), Some(wav_path)) = (text, wav_path) {
@@ -430,11 +435,13 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let items: Vec<crate::RecordingItem> = rows
             .into_iter()
             .map(|row| {
-                let name = std::path::Path::new(&row.file_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or(&row.file_path)
-                    .to_string();
+                let name = row.display_name.clone().unwrap_or_else(|| {
+                    std::path::Path::new(&row.file_path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&row.file_path)
+                        .to_string()
+                });
 
                 // Formata data: ISO8601 -> "DD/MM/YYYY HH:MM"
                 let date = chrono::DateTime::parse_from_rfc3339(&row.created_at)
@@ -474,8 +481,8 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let row = rows.into_iter().find(|r| r.id == id as i64);
 
         if let Some(row) = row {
-            let has_transcription = row.transcription_status == "done"
-                && row.transcription_text.is_some();
+            let has_transcription =
+                row.transcription_status == "done" && row.transcription_text.is_some();
             let transcription_text = row.transcription_text.clone();
 
             {
@@ -526,6 +533,40 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 app.set_transcription_progress(0.0);
             });
         }
+    });
+
+    // === Callback: Excluir gravacao ===
+    let state_clone = state.clone();
+    let app_weak = app.as_weak();
+    app.on_delete_recording(move |id| {
+        let file_path = {
+            let s = state_clone.lock().unwrap();
+            s.db.delete_recording(id as i64).ok().flatten()
+        };
+
+        if let Some(wav_path) = file_path {
+            let wav_path = std::path::PathBuf::from(&wav_path);
+            let _ = std::fs::remove_file(&wav_path);
+            let txt_path = wav_path.with_extension("txt");
+            let _ = std::fs::remove_file(txt_path);
+        }
+
+        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+            app.invoke_load_recordings();
+        });
+    });
+
+    // === Callback: Renomear gravacao ===
+    let state_clone = state.clone();
+    let app_weak = app.as_weak();
+    app.on_rename_recording(move |id, name| {
+        {
+            let s = state_clone.lock().unwrap();
+            let _ = s.db.rename_recording(id as i64, name.as_str());
+        }
+        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+            app.invoke_load_recordings();
+        });
     });
 
     Ok(())

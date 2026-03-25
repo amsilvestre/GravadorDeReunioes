@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod cloud;
 pub mod local;
 pub mod model_downloader;

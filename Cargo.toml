@@ -6,6 +6,7 @@ description = "Gravador de reunioes com transcricao automatica"
 
 [dependencies]
 slint = "1"
+image = { version = "0.25", default-features = false, features = ["ico", "png"] }
 cpal = "0.15"
 hound = "3.5"
 whisper-rs = "0.16"
@@ -18,7 +19,6 @@ chrono = "0.4"
 anyhow = "1"
 dirs = "6"
 ringbuf = "0.4"
-rubato = "0.16"
 num_cpus = "1"
 arboard = "3"
 reqwest = { version = "0.12", features = ["stream"] }
@@ -26,6 +26,7 @@ futures-util = "0.3"
 
 [build-dependencies]
 slint-build = "1"
+winres = "0.1"
 
 [profile.release]
 lto = true

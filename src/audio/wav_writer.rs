@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use hound::{SampleFormat, WavSpec, WavWriter as HoundWriter};
 use std::io::BufWriter;
@@ -47,7 +49,9 @@ impl WavFileWriter {
     /// Finaliza o arquivo WAV (escreve header correto)
     pub fn finalize(self) -> Result<PathBuf> {
         let path = self.path.clone();
-        self.writer.finalize().context("Falha ao finalizar arquivo WAV")?;
+        self.writer
+            .finalize()
+            .context("Falha ao finalizar arquivo WAV")?;
         Ok(path)
     }
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::audio::capture::{CaptureConfig, CaptureHandles};
 use ringbuf::traits::{Consumer, Observer};
 
@@ -7,25 +9,35 @@ pub struct MixerOutput {
     pub rms_level: f32,
 }
 
-/// Mixer que le de ambos os ring buffers (mic + loopback) e mixa em mono.
+/// Mixer que le de ambos os ring buffers (mic + loopback), mixa em mono e faz reamostragem.
 pub struct Mixer {
     mic_consumer: ringbuf::HeapCons<f32>,
     loopback_consumer: ringbuf::HeapCons<f32>,
     mic_config: CaptureConfig,
     loopback_config: CaptureConfig,
     target_sample_rate: u32,
-    target_channels: u16,
+    source_sample_rate: u32,
+    downsample_factor: usize,
 }
 
 impl Mixer {
-    pub fn new(handles: CaptureHandles, target_sample_rate: u32, target_channels: u16) -> Self {
+    pub fn new(handles: CaptureHandles, target_sample_rate: u32, _target_channels: u16) -> Self {
+        let source_rate = handles.loopback_config.sample_rate;
+
+        let downsample_factor = if source_rate > target_sample_rate {
+            (source_rate / target_sample_rate) as usize
+        } else {
+            1
+        };
+
         Self {
             mic_config: handles.mic_config,
             loopback_config: handles.loopback_config,
             mic_consumer: handles.mic_consumer,
             loopback_consumer: handles.loopback_consumer,
             target_sample_rate,
-            target_channels,
+            source_sample_rate: source_rate,
+            downsample_factor,
         }
     }
 
@@ -49,24 +61,19 @@ impl Mixer {
             mixed.push(val);
         }
 
-        // Calcula RMS para o medidor de nivel
-        let rms_level = if mixed.is_empty() {
-            0.0
-        } else {
-            let sum_sq: f32 = mixed.iter().map(|s| s * s).sum();
-            (sum_sq / mixed.len() as f32).sqrt()
-        };
-
-        // Se target_channels == 2, duplica para stereo
-        let output = if self.target_channels == 2 {
-            let mut stereo = Vec::with_capacity(mixed.len() * 2);
-            for s in &mixed {
-                stereo.push(*s);
-                stereo.push(*s);
-            }
-            stereo
+        // Faz downsampling simples por média
+        let output = if self.downsample_factor > 1 {
+            Self::downsample(&mixed, self.downsample_factor)
         } else {
             mixed
+        };
+
+        // Calcula RMS para o medidor de nivel
+        let rms_level = if output.is_empty() {
+            0.0
+        } else {
+            let sum_sq: f32 = output.iter().map(|s| s * s).sum();
+            (sum_sq / output.len() as f32).sqrt()
         };
 
         MixerOutput {
@@ -108,12 +115,19 @@ impl Mixer {
         mono
     }
 
-    pub fn target_sample_rate(&self) -> u32 {
-        self.target_sample_rate
-    }
-
-    pub fn target_channels(&self) -> u16 {
-        self.target_channels
+    /// Downsampling por média (anti-aliasing simples)
+    fn downsample(samples: &[f32], factor: usize) -> Vec<f32> {
+        if factor <= 1 || samples.is_empty() {
+            return samples.to_vec();
+        }
+        let output_len = samples.len() / factor;
+        let mut output = Vec::with_capacity(output_len);
+        for i in 0..output_len {
+            let chunk = &samples[i * factor..(i + 1) * factor];
+            let sum: f32 = chunk.iter().sum();
+            output.push(sum / factor as f32);
+        }
+        output
     }
 }
 

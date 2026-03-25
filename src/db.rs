@@ -36,14 +36,18 @@ impl Database {
             );",
         )?;
 
+        // Migration: adiciona coluna display_name se nao existir
+        let _ = conn.execute("ALTER TABLE recordings ADD COLUMN display_name TEXT", []);
+
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
     }
 
     fn db_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Nao foi possivel encontrar o diretorio de configuracao"))?;
+        let config_dir = dirs::config_dir().ok_or_else(|| {
+            anyhow::anyhow!("Nao foi possivel encontrar o diretorio de configuracao")
+        })?;
         Ok(config_dir.join("GravadorDeReunioes").join("gravador.db"))
     }
 
@@ -102,7 +106,7 @@ impl Database {
     pub fn get_all_recordings(&self) -> Result<Vec<RecordingRow>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, file_path, created_at, duration_secs, transcription_status, transcription_text
+            "SELECT id, file_path, created_at, duration_secs, transcription_status, transcription_text, display_name
              FROM recordings ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], |row| {
@@ -113,6 +117,7 @@ impl Database {
                 duration_secs: row.get(3)?,
                 transcription_status: row.get(4)?,
                 transcription_text: row.get(5)?,
+                display_name: row.get(6)?,
             })
         })?;
         let mut result = Vec::new();
@@ -120,6 +125,26 @@ impl Database {
             result.push(row?);
         }
         Ok(result)
+    }
+
+    pub fn delete_recording(&self, id: i64) -> Result<Option<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT file_path FROM recordings WHERE id = ?1")?;
+        let file_path: Option<String> = stmt.query_row([id], |row| row.get(0)).ok();
+        conn.execute(
+            "DELETE FROM recordings WHERE id = ?1",
+            rusqlite::params![id],
+        )?;
+        Ok(file_path)
+    }
+
+    pub fn rename_recording(&self, id: i64, display_name: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE recordings SET display_name = ?1 WHERE id = ?2",
+            rusqlite::params![display_name, id],
+        )?;
+        Ok(())
     }
 }
 
@@ -130,4 +155,5 @@ pub struct RecordingRow {
     pub duration_secs: i64,
     pub transcription_status: String,
     pub transcription_text: Option<String>,
+    pub display_name: Option<String>,
 }
