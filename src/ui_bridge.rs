@@ -189,10 +189,30 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 let wav_path = match &s.current_recording_path {
                     Some(p) => p.clone(),
                     None => {
-                        eprintln!("Nenhuma gravacao para transcrever");
+                        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                            app.set_transcription_status("Nenhuma gravação para transcrever".into());
+                        });
                         return;
                     }
                 };
+                
+                if !wav_path.exists() {
+                    let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                        app.set_transcription_status("Arquivo de áudio não encontrado".into());
+                    });
+                    return;
+                }
+                
+                if let Some(ext) = wav_path.extension() {
+                    let ext = ext.to_string_lossy().to_lowercase();
+                    if ext != "wav" && ext != "mp3" && ext != "m4a" && ext != "ogg" && ext != "flac" {
+                        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                            app.set_transcription_status("Arquivo inválido. Use arquivos de áudio (WAV, MP3, etc)".into());
+                        });
+                        return;
+                    }
+                }
+                
                 let engine = s.config.engine;
                 let api_key = s.config.api_key.clone();
                 let model_name = s.config.model_name().to_string();
