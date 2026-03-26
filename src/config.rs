@@ -12,6 +12,8 @@ pub struct AppConfig {
     pub model_index: i32,
     /// Indice do idioma: 0=pt, 1=en, 2=es, etc
     pub language_index: i32,
+    /// 0 = CPU, 1 = GPU
+    pub hardware_index: i32,
     /// Chave API da OpenAI
     pub api_key: String,
     /// Diretorio de saida para gravacoes
@@ -56,6 +58,11 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
 
+        let hardware_index = db
+            .get_config("hardware_index")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
         let api_key = db.get_config("api_key")?.unwrap_or_default();
 
         let default_output = Self::default_output_dir()?;
@@ -75,6 +82,7 @@ impl AppConfig {
             theme_index,
             model_index,
             language_index,
+            hardware_index,
             api_key,
             output_dir,
             models_dir,
@@ -88,6 +96,7 @@ impl AppConfig {
         db.set_config("theme_index", &self.theme_index.to_string())?;
         db.set_config("model_index", &self.model_index.to_string())?;
         db.set_config("language_index", &self.language_index.to_string())?;
+        db.set_config("hardware_index", &self.hardware_index.to_string())?;
         db.set_config("api_key", &self.api_key)?;
         db.set_config("output_dir", &self.output_dir.to_string_lossy())?;
         db.set_config("input_device_index", &self.input_device_index.to_string())?;

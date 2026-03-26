@@ -17,6 +17,7 @@ export component TranscriptionPanel inherits Rectangle {
     in property <float> progress: 0.0;
     in property <bool> is-transcribing: false;
     in property <string> status-text: "";
+    in property <string> duration-text: "";
     in property <bool> has-recording: false;
 
     // Propriedade de busca
@@ -26,6 +27,7 @@ export component TranscriptionPanel inherits Rectangle {
     callback transcribe();
     callback copy-to-clipboard();
     callback export-text();
+    callback search-changed(string);
 
     VerticalBox {
         padding: AppStyle.spacing;
@@ -78,11 +80,13 @@ export component TranscriptionPanel inherits Rectangle {
                     text <=> root.search-text;
                     height: 100%;
                     width: 100%;
+                    edited(value) => { root.search-changed(value); }
                 }
             }
 
             Button {
                 text: "Buscar";
+                clicked => { root.search-changed(root.search-text); }
             }
 
             if root.search-text != "": Text {
@@ -97,6 +101,12 @@ export component TranscriptionPanel inherits Rectangle {
         if root.status-text != "": Text {
             text: root.status-text;
             font-size: 14px;
+            color: AppStyle.text-secondary;
+        }
+
+        if root.duration-text != "": Text {
+            text: root.duration-text;
+            font-size: 12px;
             color: AppStyle.text-secondary;
         }
 

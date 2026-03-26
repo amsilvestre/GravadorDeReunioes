@@ -10,14 +10,18 @@ export component SettingsPanel inherits Rectangle {
     in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
     in-out property <int> language-index: 0;
+    in-out property <int> hardware-index: 0;
     in-out property <int> input-device-index: 0;
     in-out property <int> output-device-index: 0;
     in-out property <string> api-key: "";
+    in-out property <string> output-dir: "";
     in property <[string]> available-models: ["tiny", "base", "small", "medium", "large"];
     in property <[string]> engine-options: ["Cloud (OpenAI)", "Local (Whisper)"];
     in property <[string]> theme-options: ["Claro", "Escuro"];
     in property <[string]> language-options: ["Portugues", "Ingles", "Espanhol", "Frances", "Alemao", "Italiano", "Japones", "Chines", "Automatico"];
+    in property <[string]> hardware-options: ["CPU"];
     in property <[string]> device-options: ["Dispositivo Padrao"];
+    in property <bool> gpu-available: false;
 
     // Callbacks
     callback save-settings();
@@ -26,8 +30,10 @@ export component SettingsPanel inherits Rectangle {
     callback model-changed(int);
     callback theme-changed(int);
     callback language-changed(int);
+    callback hardware-changed(int);
     callback input-device-changed(int);
     callback output-device-changed(int);
+    callback select-output-folder();
     callback load-devices();
 
     VerticalBox {
@@ -81,6 +87,35 @@ export component SettingsPanel inherits Rectangle {
                 font-size: 12px;
                 color: AppStyle.text-secondary;
                 wrap: word-wrap;
+            }
+        }
+
+        // CPU / GPU
+        if engine-index == 1: VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Hardware";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.gpu-available ? ["CPU", "GPU"] : ["CPU"];
+                current-index <=> root.hardware-index;
+                selected(value) => { root.hardware-changed(self.current-index); }
+            }
+
+            if root.gpu-available: Text {
+                text: "GPU disponivel neste computador.";
+                font-size: 12px;
+                color: AppStyle.success-green;
+            }
+            if !root.gpu-available: Text {
+                text: "GPU nao detectada. Usando CPU.";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
             }
         }
 
@@ -157,10 +192,19 @@ export component SettingsPanel inherits Rectangle {
             }
 
             Text {
-                text: "As gravacoes serao salvas nesta pasta.";
+                text: root.output-dir == "" ? "As gravacoes serao salvas nesta pasta." : root.output-dir;
                 font-size: 12px;
                 color: AppStyle.text-secondary;
                 wrap: word-wrap;
+            }
+
+            HorizontalBox {
+                spacing: AppStyle.spacing-small;
+
+                Button {
+                    text: "Selecionar Pasta";
+                    clicked => { root.select-output-folder(); }
+                }
             }
         }
 

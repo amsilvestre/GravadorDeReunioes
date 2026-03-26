@@ -54,8 +54,13 @@ component SidebarButton inherits Rectangle {
 export component AppWindow inherits Window {
     title: "AMS Gravador de reuniões";
     icon: @image-url("app.ico");
-    preferred-width: 1000px;
-    preferred-height: 680px;
+    // Reasonable default size, resizable within limits
+    width: 900px;
+    height: 650px;
+    min-width: 600px;
+    min-height: 400px;
+    max-width: 1200px;
+    max-height: 800px;
     background: AppStyle.bg-main;
 
     // Estado da pagina ativa: 0=Gravar, 1=Historico, 2=Config
@@ -78,6 +83,7 @@ export component AppWindow inherits Window {
     in property <float> transcription-progress: 0.0;
     in property <bool> is-transcribing: false;
     in property <string> transcription-status: "";
+    in property <string> transcription-duration: "";
     in property <bool> has-recording: false;
     in-out property <string> transcription-search: "";
 
@@ -86,11 +92,14 @@ export component AppWindow inherits Window {
     in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
     in-out property <int> language-index: 0;
+    in-out property <int> hardware-index: 0;
     in-out property <int> input-device-index: 0;
     in-out property <int> output-device-index: 0;
     in-out property <string> api-key: "";
+    in-out property <string> output-dir: "";
     in property <[string]> input-devices: [];
     in property <[string]> output-devices: [];
+    in property <bool> gpu-available: false;
 
     // === Propriedades de historico ===
     in property <[RecordingItem]> recordings: [];
@@ -105,13 +114,16 @@ export component AppWindow inherits Window {
     callback copy-to-clipboard();
     callback export-text();
     callback save-settings();
+    callback transcription-search-changed(string);
     callback api-key-changed(string);
     callback engine-changed(int);
     callback theme-changed(int);
     callback model-changed(int);
     callback language-changed(int);
+    callback hardware-changed(int);
     callback input-device-changed(int);
     callback output-device-changed(int);
+    callback select-output-folder();
     callback load-devices();
     callback load-recordings();
     callback select-recording(int);
@@ -238,8 +250,10 @@ export component AppWindow inherits Window {
                         progress: root.transcription-progress;
                         is-transcribing: root.is-transcribing;
                         status-text: root.transcription-status;
+                        duration-text: root.transcription-duration;
                         has-recording: root.has-recording;
                         search-text <=> root.transcription-search;
+                        search-changed(text) => { root.transcription-search-changed(text); }
                         transcribe => { root.transcribe(); }
                         copy-to-clipboard => { root.copy-to-clipboard(); }
                         export-text => { root.export-text(); }
@@ -263,18 +277,23 @@ export component AppWindow inherits Window {
                     theme_index <=> root.theme_index;
                     model-index <=> root.model-index;
                     language-index <=> root.language-index;
+                    hardware-index <=> root.hardware-index;
                     input-device-index <=> root.input-device-index;
                     output-device-index <=> root.output-device-index;
                     api-key <=> root.api-key;
+                    output-dir <=> root.output-dir;
                     device-options: root.input-devices;
+                    gpu-available: root.gpu-available;
                     save-settings => { root.save-settings(); }
                     api-key-changed(key) => { root.api-key-changed(key); }
                     engine-changed(idx) => { root.engine-changed(idx); }
                     theme-changed(idx) => { root.theme-changed(idx); }
                     model-changed(idx) => { root.model-changed(idx); }
                     language-changed(idx) => { root.language-changed(idx); }
+                    hardware-changed(idx) => { root.hardware-changed(idx); }
                     input-device-changed(idx) => { root.input-device-changed(idx); }
                     output-device-changed(idx) => { root.output-device-changed(idx); }
+                    select-output-folder => { root.select-output-folder(); }
                 }
             }
         }

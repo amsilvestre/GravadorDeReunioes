@@ -21,12 +21,49 @@ fn send_notification(title: &str, message: &str) {
     }
 }
 
+fn format_duration(duration: std::time::Duration) -> slint::SharedString {
+    let secs = duration.as_secs();
+    let h = secs / 3600;
+    let m = (secs % 3600) / 60;
+    let s = secs % 60;
+    format!("{:02}:{:02}:{:02}", h, m, s).into()
+}
+
+fn apply_transcription_search(app: &AppWindow, state: &Arc<Mutex<AppState>>) {
+    let query = app.get_transcription_search().to_string().to_lowercase();
+    let segments = {
+        let s = state.lock().unwrap();
+        s.last_transcription_segments.clone()
+    };
+
+    let filtered: Vec<crate::TranscriptionSegment> = if query.is_empty() {
+        segments
+    } else {
+        segments
+            .into_iter()
+            .filter(|seg| seg.text.to_lowercase().contains(&query))
+            .collect()
+    };
+
+    let model = std::rc::Rc::new(slint::VecModel::from(filtered));
+    app.set_transcription_segments(model.into());
+}
+
+fn detect_gpu_available() -> bool {
+    std::process::Command::new("nvidia-smi")
+        .arg("-L")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 pub struct AppState {
     pub config: AppConfig,
     pub db: Database,
     pub current_recording_id: Option<i64>,
     pub current_recording_path: Option<std::path::PathBuf>,
     pub last_transcription_text: Option<String>,
+    pub last_transcription_segments: Vec<crate::TranscriptionSegment>,
 }
 
 pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
@@ -36,6 +73,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         current_recording_id: None,
         current_recording_path: None,
         last_transcription_text: None,
+        last_transcription_segments: Vec::new(),
     }));
 
     // Flag compartilhada para controle de gravacao
@@ -48,13 +86,21 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     let paused_flag_for_resume = paused_flag.clone();
 
     // Carrega configuracoes na UI
+    let gpu_available = detect_gpu_available();
     app.set_engine_index(config.engine);
     app.set_theme_index(config.theme_index);
     app.set_model_index(config.model_index);
     app.set_language_index(config.language_index);
+    app.set_hardware_index(if gpu_available {
+        config.hardware_index
+    } else {
+        0
+    });
     app.set_input_device_index(config.input_device_index);
     app.set_output_device_index(config.output_device_index);
     app.set_api_key(config.api_key.into());
+    app.set_output_dir(config.output_dir.to_string_lossy().to_string().into());
+    app.set_gpu_available(gpu_available);
     app.global::<AppStyle>()
         .set_dark_theme(config.theme_index == 1);
 
@@ -199,8 +245,19 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
             // Loop de gravacao
             let start = std::time::Instant::now();
             let paused = paused_flag.clone();
+            let mut paused_total = std::time::Duration::from_secs(0);
+            let mut pause_started: Option<std::time::Instant> = None;
             while recording_flag.load(Ordering::Relaxed) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
+
+                let is_paused = paused.load(Ordering::Relaxed);
+                if is_paused {
+                    if pause_started.is_none() {
+                        pause_started = Some(std::time::Instant::now());
+                    }
+                } else if let Some(ps) = pause_started.take() {
+                    paused_total += ps.elapsed();
+                }
 
                 // Le e mixa audio
                 let output = mixer.read_and_mix();
@@ -214,21 +271,20 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 }
 
                 // Atualiza UI a cada ~100ms
-                let elapsed = start.elapsed();
-                let secs = elapsed.as_secs();
-                let h = secs / 3600;
-                let m = (secs % 3600) / 60;
-                let s = secs % 60;
-                let duration_str: slint::SharedString =
-                    format!("{:02}:{:02}:{:02}", h, m, s).into();
-                let level = if paused.load(Ordering::Relaxed) {
+                let mut elapsed = start.elapsed();
+                if let Some(ps) = pause_started {
+                    elapsed = elapsed.saturating_sub(paused_total + ps.elapsed());
+                } else {
+                    elapsed = elapsed.saturating_sub(paused_total);
+                }
+                let duration_str = format_duration(elapsed);
+                let level = if is_paused {
                     0.0
                 } else {
                     output.rms_level.min(1.0)
                 };
 
                 let app_weak = app_weak.clone();
-                let is_paused = paused.load(Ordering::Relaxed);
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(app) = app_weak.upgrade() {
                         app.set_recording_duration(duration_str);
@@ -240,7 +296,13 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
 
             // Finaliza gravacao
             capture.stop();
-            let duration_secs = start.elapsed().as_secs() as i64;
+            let mut final_elapsed = start.elapsed();
+            if let Some(ps) = pause_started {
+                final_elapsed = final_elapsed.saturating_sub(paused_total + ps.elapsed());
+            } else {
+                final_elapsed = final_elapsed.saturating_sub(paused_total);
+            }
+            let duration_secs = final_elapsed.as_secs() as i64;
 
             match wav_writer.finalize() {
                 Ok(path) => {
@@ -302,7 +364,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let app_weak = app_weak.clone();
 
         std::thread::spawn(move || {
-            let (wav_path, engine_type, api_key, models_dir, model_name, language_code) = {
+            let (wav_path, engine_type, api_key, models_dir, model_name, language_code, use_gpu) = {
                 let s = state.lock().unwrap();
                 let wav_path = match &s.current_recording_path {
                     Some(p) => p.clone(),
@@ -336,7 +398,8 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 let model_name = s.config.model_name().to_string();
                 let models_dir = s.config.models_dir.clone();
                 let language_code = s.config.language_code();
-                (wav_path, engine, api_key, models_dir, model_name, language_code)
+                let use_gpu = s.config.hardware_index == 1;
+                (wav_path, engine, api_key, models_dir, model_name, language_code, use_gpu)
             };
 
             // Atualiza UI: transcrevendo
@@ -347,12 +410,14 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         app.set_is_transcribing(true);
                         app.set_transcription_progress(0.0);
                         app.set_transcription_status("Iniciando...".into());
+                        app.set_transcription_duration("".into());
                     }
                 });
             }
 
             // Seleciona engine e transcreve
             use crate::transcription::TranscriptionEngine;
+            let transcription_start = std::time::Instant::now();
             let result = if engine_type == 0 {
                 // Cloud (OpenAI)
                 if api_key.is_empty() {
@@ -431,7 +496,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                                 }
                             });
                         });
-                        let engine = crate::transcription::local::LocalEngine::new(path);
+                        let engine = crate::transcription::local::LocalEngine::new(path, use_gpu);
                         engine.transcribe(&wav_path, language_code.as_deref(), on_progress)
                     }
                 }
@@ -445,38 +510,48 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         .map(|seg| seg.text.as_str())
                         .collect::<Vec<_>>()
                         .join(" ");
+                    let model_segments: Vec<crate::TranscriptionSegment> = segments
+                        .iter()
+                        .map(|seg| {
+                            let secs = seg.start_ms / 1000;
+                            let mins = secs / 60;
+                            let timestamp = format!("{:02}:{:02}", mins, secs % 60);
+                            crate::TranscriptionSegment {
+                                timestamp: timestamp.into(),
+                                text: seg.text.clone().into(),
+                            }
+                        })
+                        .collect();
                     {
                         let mut s = state.lock().unwrap();
                         if let Some(id) = s.current_recording_id {
                             let _ = s.db.update_recording_transcription(id, "done", Some(&full_text));
                         }
                         s.last_transcription_text = Some(full_text.clone());
+                        s.last_transcription_segments = model_segments.clone();
                     }
 
-                    // Converte para modelo Slint (Rc precisa ser criado na UI thread)
-                    let slint_segments: Vec<(String, String)> = segments
-                        .iter()
-                        .map(|seg| {
-                            let secs = seg.start_ms / 1000;
-                            let mins = secs / 60;
-                            let timestamp = format!("{:02}:{:02}", mins, secs % 60);
-                            (timestamp, seg.text.clone())
-                        })
-                        .collect();
-
                     let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
-                        let model_data: Vec<crate::TranscriptionSegment> = slint_segments
-                            .iter()
-                            .map(|(ts, text)| crate::TranscriptionSegment {
-                                timestamp: ts.clone().into(),
-                                text: text.clone().into(),
-                            })
-                            .collect();
-                        let model = std::rc::Rc::new(slint::VecModel::from(model_data));
                         app.set_is_transcribing(false);
                         app.set_transcription_progress(1.0);
-                        app.set_transcription_status("Transcricao concluida".into());
-                        app.set_transcription_segments(model.into());
+                        let elapsed = transcription_start.elapsed();
+                        let duration_text = format!(
+                            "Transcrição concluída em {:02}:{:02}:{:02}",
+                            elapsed.as_secs() / 3600,
+                            (elapsed.as_secs() % 3600) / 60,
+                            elapsed.as_secs() % 60
+                        );
+                        app.set_transcription_status(duration_text.clone().into());
+                        app.set_transcription_duration(duration_text.into());
+                        app.set_transcription_segments(std::rc::Rc::new(slint::VecModel::from(model_segments.clone())).into());
+                    });
+
+                    let app_for_filter = app_weak.clone();
+                    let state_for_filter = state.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(app) = app_for_filter.upgrade() {
+                            apply_transcription_search(&app, &state_for_filter);
+                        }
                     });
                     
                     // Notificacao
@@ -559,9 +634,11 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
             s.config.theme_index = app.get_theme_index();
             s.config.model_index = app.get_model_index();
             s.config.language_index = app.get_language_index();
+            s.config.hardware_index = app.get_hardware_index();
             s.config.input_device_index = app.get_input_device_index();
             s.config.output_device_index = app.get_output_device_index();
             s.config.api_key = app.get_api_key().to_string();
+            s.config.output_dir = std::path::PathBuf::from(app.get_output_dir().to_string());
 
             if let Err(e) = s.config.save(&s.db) {
                 eprintln!("Erro ao salvar configuracoes: {}", e);
@@ -580,8 +657,30 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     });
     app.on_model_changed(move |_idx| {});
     app.on_language_changed(move |_idx| {});
+    app.on_hardware_changed(move |_idx| {});
     app.on_input_device_changed(move |_idx| {});
     app.on_output_device_changed(move |_idx| {});
+
+    let state_clone = state.clone();
+    let app_weak = app.as_weak();
+    app.on_transcription_search_changed(move |_text| {
+        if let Some(app) = app_weak.upgrade() {
+            apply_transcription_search(&app, &state_clone);
+        }
+    });
+
+    let state_clone = state.clone();
+    let app_weak = app.as_weak();
+    app.on_select_output_folder(move || {
+        if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+            let mut s = state_clone.lock().unwrap();
+            s.config.output_dir = folder.clone();
+            let _ = s.config.save(&s.db);
+            let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                app.set_output_dir(folder.to_string_lossy().to_string().into());
+            });
+        }
+    });
 
     // === Callback: Carregar historico ===
     let state_clone = state.clone();

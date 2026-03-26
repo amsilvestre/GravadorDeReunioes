@@ -112,11 +112,11 @@ export component RecordingPanel inherits Rectangle {
         }
 
         if !root.is-recording: HorizontalBox {
-            spacing: AppStyle.spacing-small;
+            spacing: 4px;
             alignment: start;
 
             Text {
-                text: "Iniciar em";
+                text: "Iniciar:";
                 font-size: 12px;
                 color: AppStyle.text-secondary;
                 vertical-alignment: center;
@@ -125,7 +125,8 @@ export component RecordingPanel inherits Rectangle {
             ComboBox {
                 model: root.delay_options;
                 current-index <=> root.delay_index;
-                width: 110px;
+                width: 70px;
+                height: 26px;
             }
         }
     }

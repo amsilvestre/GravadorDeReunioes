@@ -4,11 +4,15 @@ use std::path::Path;
 
 pub struct LocalEngine {
     model_path: std::path::PathBuf,
+    use_gpu: bool,
 }
 
 impl LocalEngine {
-    pub fn new(model_path: std::path::PathBuf) -> Self {
-        Self { model_path }
+    pub fn new(model_path: std::path::PathBuf, use_gpu: bool) -> Self {
+        Self {
+            model_path,
+            use_gpu,
+        }
     }
 
     /// Carrega arquivo WAV e converte para 16kHz mono f32 (formato exigido pelo whisper)
@@ -93,9 +97,12 @@ impl TranscriptionEngine for LocalEngine {
         on_progress(0.1);
 
         // Carrega o modelo whisper
+        let mut ctx_params = whisper_rs::WhisperContextParameters::new();
+        ctx_params.use_gpu(self.use_gpu);
+
         let ctx = whisper_rs::WhisperContext::new_with_params(
             self.model_path.to_str().unwrap_or_default(),
-            whisper_rs::WhisperContextParameters::default(),
+            ctx_params,
         )
         .context("Falha ao carregar modelo Whisper")?;
 
