@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, ComboBox, LineEdit, Switch } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ComboBox, LineEdit, Switch, ScrollView } from "std-widgets.slint";
 import { AppStyle } from "style.slint";
 
 export component SettingsPanel inherits Rectangle {
@@ -36,231 +36,233 @@ export component SettingsPanel inherits Rectangle {
     callback select-output-folder();
     callback load-devices();
 
-    VerticalBox {
-        padding: AppStyle.spacing;
-        spacing: AppStyle.spacing;
-
-        Text {
-            text: "Configuracoes";
-            font-size: 20px;
-            font-weight: 600;
-            color: AppStyle.text-primary;
-        }
-
-        // Engine de transcricao
+    ScrollView {
         VerticalBox {
-            spacing: AppStyle.spacing-small;
+            padding: AppStyle.spacing;
+            spacing: AppStyle.spacing;
 
             Text {
-                text: "Motor de Transcricao";
-                font-size: 14px;
-                font-weight: 500;
+                text: "Configuracoes";
+                font-size: 20px;
+                font-weight: 600;
                 color: AppStyle.text-primary;
             }
 
-            ComboBox {
-                model: root.engine-options;
-                current-index <=> root.engine-index;
-                selected(value) => { root.engine-changed(self.current-index); }
-            }
-        }
-
-        // Idioma
-        VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Idioma";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            ComboBox {
-                model: root.language-options;
-                current-index <=> root.language-index;
-                selected(value) => { root.language-changed(self.current-index); }
-            }
-
-            Text {
-                text: "Idioma para transcricao. Automatico detecta automaticamente.";
-                font-size: 12px;
-                color: AppStyle.text-secondary;
-                wrap: word-wrap;
-            }
-        }
-
-        // CPU / GPU
-        if engine-index == 1: VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Hardware";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            ComboBox {
-                model: root.gpu-available ? ["CPU", "GPU"] : ["CPU"];
-                current-index <=> root.hardware-index;
-                selected(value) => { root.hardware-changed(self.current-index); }
-            }
-
-            if root.gpu-available: Text {
-                text: "GPU disponivel neste computador.";
-                font-size: 12px;
-                color: AppStyle.success-green;
-            }
-            if !root.gpu-available: Text {
-                text: "GPU nao detectada. Usando CPU.";
-                font-size: 12px;
-                color: AppStyle.text-secondary;
-            }
-        }
-
-        VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Tema";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            ComboBox {
-                model: root.theme-options;
-                current-index <=> root.theme_index;
-                selected(value) => { root.theme-changed(self.current-index); }
-            }
-        }
-
-        // API Key (so mostra se engine = cloud)
-        if engine-index == 0: VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Chave API OpenAI";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            LineEdit {
-                text <=> root.api-key;
-                placeholder-text: "sk-...";
-                input-type: password;
-                edited(value) => { root.api-key-changed(value); }
-            }
-        }
-
-        // Modelo local (so mostra se engine = local)
-        if engine-index == 1: VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Modelo Whisper";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            ComboBox {
-                model: root.available-models;
-                current-index <=> root.model-index;
-                selected(value) => { root.model-changed(self.current-index); }
-            }
-
-            Text {
-                text: "Modelos maiores sao mais precisos, mas mais lentos em CPU.";
-                font-size: 12px;
-                color: AppStyle.text-secondary;
-                wrap: word-wrap;
-            }
-        }
-
-        // Pasta de saida
-        VerticalBox {
-            spacing: AppStyle.spacing-small;
-
-            Text {
-                text: "Pasta de Saida";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
-            }
-
-            Text {
-                text: root.output-dir == "" ? "As gravacoes serao salvas nesta pasta." : root.output-dir;
-                font-size: 12px;
-                color: AppStyle.text-secondary;
-                wrap: word-wrap;
-            }
-
-            HorizontalBox {
+            // Engine de transcricao
+            VerticalBox {
                 spacing: AppStyle.spacing-small;
 
-                Button {
-                    text: "Selecionar Pasta";
-                    clicked => { root.select-output-folder(); }
+                Text {
+                    text: "Motor de Transcricao";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.engine-options;
+                    current-index <=> root.engine-index;
+                    selected(value) => { root.engine-changed(self.current-index); }
                 }
             }
-        }
 
-        // Dispositivo de entrada (microfone)
-        VerticalBox {
-            spacing: AppStyle.spacing-small;
+            // Idioma
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
 
-            Text {
-                text: "Microfone";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
+                Text {
+                    text: "Idioma";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.language-options;
+                    current-index <=> root.language-index;
+                    selected(value) => { root.language-changed(self.current-index); }
+                }
+
+                Text {
+                    text: "Idioma para transcricao. Automatico detecta automaticamente.";
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
+                }
             }
 
-            ComboBox {
-                model: root.device-options;
-                current-index <=> root.input-device-index;
-                selected(value) => { root.input-device-changed(self.current-index); }
+            // CPU / GPU
+            if engine-index == 1: VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                Text {
+                    text: "Hardware";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.gpu-available ? ["CPU", "GPU"] : ["CPU"];
+                    current-index <=> root.hardware-index;
+                    selected(value) => { root.hardware-changed(self.current-index); }
+                }
+
+                if root.gpu-available: Text {
+                    text: "GPU disponivel neste computador.";
+                    font-size: 12px;
+                    color: AppStyle.success-green;
+                }
+                if !root.gpu-available: Text {
+                    text: "GPU nao detectada. Usando CPU.";
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                }
             }
-        }
 
-        // Dispositivo de saida (audio do sistema)
-        VerticalBox {
-            spacing: AppStyle.spacing-small;
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
 
-            Text {
-                text: "Audio do Sistema (Loopback)";
-                font-size: 14px;
-                font-weight: 500;
-                color: AppStyle.text-primary;
+                Text {
+                    text: "Tema";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.theme-options;
+                    current-index <=> root.theme-index;
+                    selected(value) => { root.theme-changed(self.current-index); }
+                }
             }
 
-            ComboBox {
-                model: root.device-options;
-                current-index <=> root.output-device-index;
-                selected(value) => { root.output-device-changed(self.current-index); }
+            // API Key (so mostra se engine = cloud)
+            if engine-index == 0: VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                Text {
+                    text: "Chave API OpenAI";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                LineEdit {
+                    text <=> root.api-key;
+                    placeholder-text: "sk-...";
+                    input-type: password;
+                    edited(value) => { root.api-key-changed(value); }
+                }
             }
 
-            Text {
-                text: "Audio que sai pelas caixas/saida.";
-                font-size: 12px;
-                color: AppStyle.text-secondary;
-                wrap: word-wrap;
+            // Modelo local (so mostra se engine = local)
+            if engine-index == 1: VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                Text {
+                    text: "Modelo Whisper";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.available-models;
+                    current-index <=> root.model-index;
+                    selected(value) => { root.model-changed(self.current-index); }
+                }
+
+                Text {
+                    text: "Modelos maiores sao mais precisos, mas mais lentos em CPU.";
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
+                }
             }
-        }
 
-        Rectangle { vertical-stretch: 1; }
+            // Pasta de saida
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
 
-        // Botao salvar
-        HorizontalBox {
-            alignment: end;
+                Text {
+                    text: "Pasta de Saida";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
 
-            Button {
-                text: "Salvar";
-                primary: true;
-                clicked => { root.save-settings(); }
+                Text {
+                    text: root.output-dir == "" ? "As gravacoes serao salvas nesta pasta." : root.output-dir;
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
+                }
+
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+
+                    Button {
+                        text: "Selecionar Pasta";
+                        clicked => { root.select-output-folder(); }
+                    }
+                }
+            }
+
+            // Dispositivo de entrada (microfone)
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                Text {
+                    text: "Microfone";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.device-options;
+                    current-index <=> root.input-device-index;
+                    selected(value) => { root.input-device-changed(self.current-index); }
+                }
+            }
+
+            // Dispositivo de saida (audio do sistema)
+            VerticalBox {
+                spacing: AppStyle.spacing-small;
+
+                Text {
+                    text: "Audio do Sistema (Loopback)";
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: AppStyle.text-primary;
+                }
+
+                ComboBox {
+                    model: root.device-options;
+                    current-index <=> root.output-device-index;
+                    selected(value) => { root.output-device-changed(self.current-index); }
+                }
+
+                Text {
+                    text: "Audio que sai pelas caixas/saida.";
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
+                }
+            }
+
+            Rectangle { vertical-stretch: 1; }
+
+            // Botao salvar
+            HorizontalBox {
+                alignment: end;
+
+                Button {
+                    text: "Salvar";
+                    primary: true;
+                    clicked => { root.save-settings(); }
+                }
             }
         }
     }
