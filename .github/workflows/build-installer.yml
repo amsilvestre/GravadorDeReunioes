@@ -1,0 +1,35 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Build release
+      run: cargo build --release
+
+    - name: Install Inno Setup
+      run: choco install innosetup
+
+    - name: Compile Installer
+      run: |
+        & "C:\Program Files\Inno Setup 6\ISCC.exe" installer.iss
+
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: AMS-Gravador-Reunioes-Installer
+        path: installer\AMS_Gravador_Reunioes_Setup.exe
