@@ -18,6 +18,10 @@ pub struct AppConfig {
     pub output_dir: PathBuf,
     /// Diretorio dos modelos whisper
     pub models_dir: PathBuf,
+    /// Indice do dispositivo de entrada (microfone)
+    pub input_device_index: i32,
+    /// Indice do dispositivo de saida (loopback)
+    pub output_device_index: i32,
 }
 
 impl AppConfig {
@@ -42,6 +46,16 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(0); // default: Portuguese
 
+        let input_device_index = db
+            .get_config("input_device_index")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        let output_device_index = db
+            .get_config("output_device_index")?
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
         let api_key = db.get_config("api_key")?.unwrap_or_default();
 
         let default_output = Self::default_output_dir()?;
@@ -64,6 +78,8 @@ impl AppConfig {
             api_key,
             output_dir,
             models_dir,
+            input_device_index,
+            output_device_index,
         })
     }
 
@@ -74,6 +90,8 @@ impl AppConfig {
         db.set_config("language_index", &self.language_index.to_string())?;
         db.set_config("api_key", &self.api_key)?;
         db.set_config("output_dir", &self.output_dir.to_string_lossy())?;
+        db.set_config("input_device_index", &self.input_device_index.to_string())?;
+        db.set_config("output_device_index", &self.output_device_index.to_string())?;
         Ok(())
     }
 

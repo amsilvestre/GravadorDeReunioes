@@ -52,9 +52,26 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     app.set_theme_index(config.theme_index);
     app.set_model_index(config.model_index);
     app.set_language_index(config.language_index);
+    app.set_input_device_index(config.input_device_index);
+    app.set_output_device_index(config.output_device_index);
     app.set_api_key(config.api_key.into());
     app.global::<AppStyle>()
         .set_dark_theme(config.theme_index == 1);
+
+    // Carrega lista de dispositivos
+    let input_devices: Vec<slint::SharedString> = crate::audio::capture::list_input_devices()
+        .iter()
+        .map(|s| s.as_str().into())
+        .collect();
+    let output_devices: Vec<slint::SharedString> = crate::audio::capture::list_output_devices()
+        .iter()
+        .map(|s| s.as_str().into())
+        .collect();
+
+    let input_model = std::rc::Rc::new(slint::VecModel::from(input_devices));
+    let output_model = std::rc::Rc::new(slint::VecModel::from(output_devices));
+    app.set_input_devices(input_model.into());
+    app.set_output_devices(output_model.into());
 
     // === Callback: Iniciar gravacao ===
     let state_clone = state.clone();
@@ -130,7 +147,21 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
             }
 
             // Inicia captura de audio
-            let capture_result = AudioCapture::start();
+            let input_idx = {
+                let s = state.lock().unwrap();
+                s.config.input_device_index as usize
+            };
+            let output_idx = {
+                let s = state.lock().unwrap();
+                s.config.output_device_index as usize
+            };
+
+            let capture_result = if input_idx > 0 || output_idx > 0 {
+                AudioCapture::start_with_devices(Some(input_idx), Some(output_idx))
+            } else {
+                AudioCapture::start()
+            };
+
             let (mut capture, handles) = match capture_result {
                 Ok(result) => result,
                 Err(e) => {
@@ -528,6 +559,8 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
             s.config.theme_index = app.get_theme_index();
             s.config.model_index = app.get_model_index();
             s.config.language_index = app.get_language_index();
+            s.config.input_device_index = app.get_input_device_index();
+            s.config.output_device_index = app.get_output_device_index();
             s.config.api_key = app.get_api_key().to_string();
 
             if let Err(e) = s.config.save(&s.db) {
@@ -547,6 +580,8 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     });
     app.on_model_changed(move |_idx| {});
     app.on_language_changed(move |_idx| {});
+    app.on_input_device_changed(move |_idx| {});
+    app.on_output_device_changed(move |_idx| {});
 
     // === Callback: Carregar historico ===
     let state_clone = state.clone();

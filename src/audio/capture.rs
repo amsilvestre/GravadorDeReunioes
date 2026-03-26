@@ -33,13 +33,30 @@ impl AudioCapture {
     /// Inicia captura de audio do microfone e do sistema (WASAPI loopback).
     /// Retorna os consumers dos ring buffers para o mixer ler.
     pub fn start() -> Result<(Self, CaptureHandles)> {
+        Self::start_with_devices(None, None)
+    }
+
+    /// Inicia captura com dispositivos específicos
+    pub fn start_with_devices(
+        input_index: Option<usize>,
+        output_index: Option<usize>,
+    ) -> Result<(Self, CaptureHandles)> {
         let host = cpal::default_host();
         let running = Arc::new(AtomicBool::new(true));
 
         // === Microfone ===
-        let mic_device = host
-            .default_input_device()
-            .context("Nenhum dispositivo de entrada (microfone) encontrado")?;
+        let mic_device = if let Some(idx) = input_index {
+            host.input_devices()
+                .ok()
+                .and_then(|mut devs| devs.nth(idx))
+                .unwrap_or_else(|| {
+                    host.default_input_device()
+                        .expect("Nenhum dispositivo de entrada")
+                })
+        } else {
+            host.default_input_device()
+                .context("Nenhum dispositivo de entrada (microfone) encontrado")?
+        };
 
         let mic_supported_config = mic_device
             .default_input_config()
@@ -63,9 +80,18 @@ impl AudioCapture {
         )?;
 
         // === Loopback (audio do sistema via WASAPI) ===
-        let loopback_device = host
-            .default_output_device()
-            .context("Nenhum dispositivo de saida encontrado para loopback")?;
+        let loopback_device = if let Some(idx) = output_index {
+            host.output_devices()
+                .ok()
+                .and_then(|mut devs| devs.nth(idx))
+                .unwrap_or_else(|| {
+                    host.default_output_device()
+                        .expect("Nenhum dispositivo de saida")
+                })
+        } else {
+            host.default_output_device()
+                .context("Nenhum dispositivo de saida encontrado para loopback")?
+        };
 
         let loopback_supported_config = loopback_device
             .default_output_config()

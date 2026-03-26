@@ -10,11 +10,14 @@ export component SettingsPanel inherits Rectangle {
     in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
     in-out property <int> language-index: 0;
+    in-out property <int> input-device-index: 0;
+    in-out property <int> output-device-index: 0;
     in-out property <string> api-key: "";
     in property <[string]> available-models: ["tiny", "base", "small", "medium", "large"];
     in property <[string]> engine-options: ["Cloud (OpenAI)", "Local (Whisper)"];
     in property <[string]> theme-options: ["Claro", "Escuro"];
     in property <[string]> language-options: ["Portugues", "Ingles", "Espanhol", "Frances", "Alemao", "Italiano", "Japones", "Chines", "Automatico"];
+    in property <[string]> device-options: ["Dispositivo Padrao"];
 
     // Callbacks
     callback save-settings();
@@ -23,6 +26,9 @@ export component SettingsPanel inherits Rectangle {
     callback model-changed(int);
     callback theme-changed(int);
     callback language-changed(int);
+    callback input-device-changed(int);
+    callback output-device-changed(int);
+    callback load-devices();
 
     VerticalBox {
         padding: AppStyle.spacing;
@@ -152,6 +158,49 @@ export component SettingsPanel inherits Rectangle {
 
             Text {
                 text: "As gravacoes serao salvas nesta pasta.";
+                font-size: 12px;
+                color: AppStyle.text-secondary;
+                wrap: word-wrap;
+            }
+        }
+
+        // Dispositivo de entrada (microfone)
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Microfone";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.device-options;
+                current-index <=> root.input-device-index;
+                selected(value) => { root.input-device-changed(self.current-index); }
+            }
+        }
+
+        // Dispositivo de saida (audio do sistema)
+        VerticalBox {
+            spacing: AppStyle.spacing-small;
+
+            Text {
+                text: "Audio do Sistema (Loopback)";
+                font-size: 14px;
+                font-weight: 500;
+                color: AppStyle.text-primary;
+            }
+
+            ComboBox {
+                model: root.device-options;
+                current-index <=> root.output-device-index;
+                selected(value) => { root.output-device-changed(self.current-index); }
+            }
+
+            Text {
+                text: "Audio que sai pelas caixas/saida.";
                 font-size: 12px;
                 color: AppStyle.text-secondary;
                 wrap: word-wrap;

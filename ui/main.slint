@@ -86,7 +86,11 @@ export component AppWindow inherits Window {
     in-out property <int> theme_index: 0;
     in-out property <int> model-index: 0;
     in-out property <int> language-index: 0;
+    in-out property <int> input-device-index: 0;
+    in-out property <int> output-device-index: 0;
     in-out property <string> api-key: "";
+    in property <[string]> input-devices: [];
+    in property <[string]> output-devices: [];
 
     // === Propriedades de historico ===
     in property <[RecordingItem]> recordings: [];
@@ -106,6 +110,9 @@ export component AppWindow inherits Window {
     callback theme-changed(int);
     callback model-changed(int);
     callback language-changed(int);
+    callback input-device-changed(int);
+    callback output-device-changed(int);
+    callback load-devices();
     callback load-recordings();
     callback select-recording(int);
     callback delete-recording(int);
@@ -256,13 +263,18 @@ export component AppWindow inherits Window {
                     theme_index <=> root.theme_index;
                     model-index <=> root.model-index;
                     language-index <=> root.language-index;
+                    input-device-index <=> root.input-device-index;
+                    output-device-index <=> root.output-device-index;
                     api-key <=> root.api-key;
+                    device-options: root.input-devices;
                     save-settings => { root.save-settings(); }
                     api-key-changed(key) => { root.api-key-changed(key); }
                     engine-changed(idx) => { root.engine-changed(idx); }
                     theme-changed(idx) => { root.theme-changed(idx); }
                     model-changed(idx) => { root.model-changed(idx); }
                     language-changed(idx) => { root.language-changed(idx); }
+                    input-device-changed(idx) => { root.input-device-changed(idx); }
+                    output-device-changed(idx) => { root.output-device-changed(idx); }
                 }
             }
         }

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo init:*)",
+      "Bash(cargo check:*)",
+      "Bash(cmd.exe /c \"winget install LLVM.LLVM --accept-package-agreements --accept-source-agreements\")",
+      "Bash(powershell.exe -Command \"winget install LLVM.LLVM --accept-package-agreements --accept-source-agreements\")",
+      "Read(//c/Program Files/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(export PATH=\"/c/Program Files/LLVM/bin:$PATH\")",
+      "Bash(cargo run:*)",
+      "Bash(export PATH=\"/c/Program Files/LLVM/bin:/c/Program Files/CMake/bin:$PATH\")",
+      "Bash(cargo search:*)",
+      "Bash(grep -r 'pub struct WhisperSegment' target/debug/.fingerprint/../../../.cargo/registry/src/index.crates.io-*/whisper-rs-0.16.0/src/)",
+      "Read(//c/Users/amsilvestre/.cargo/registry/src/**)",
+      "Bash(cargo build:*)"
+    ]
+  }
+}
