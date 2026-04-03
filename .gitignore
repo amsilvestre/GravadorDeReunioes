@@ -1,7 +1,3 @@
-/target
-/models/
-/recordings/
-*.wav
-*.bin
-.claude/memory/
-.claude/plans/
+cuda_dlls/
+installer/*.exe
+target/
