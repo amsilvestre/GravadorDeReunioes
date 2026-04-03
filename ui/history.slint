@@ -46,7 +46,7 @@ export component HistoryPanel inherits Rectangle {
             Rectangle { horizontal-stretch: 1; }
 
             Button {
-                text: "Atualizar";
+                text: "🔄 Atualizar";
                 clicked => { root.refresh(); }
             }
         }
@@ -249,7 +249,7 @@ export component HistoryPanel inherits Rectangle {
 
         // Botao de carregar
         if root.selected-id >= 0: Button {
-            text: "Carregar Gravacao Selecionada";
+            text: "✅ Carregar Gravacao Selecionada";
             primary: true;
             clicked => { root.load-recording(root.selected-id); }
         }

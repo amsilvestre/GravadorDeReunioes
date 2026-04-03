@@ -19,7 +19,7 @@ export component SettingsPanel inherits Rectangle {
     in property <[string]> engine-options: ["Cloud (OpenAI)", "Local (Whisper)"];
     in property <[string]> theme-options: ["Claro", "Escuro"];
     in property <[string]> language-options: ["Portugues", "Ingles", "Espanhol", "Frances", "Alemao", "Italiano", "Japones", "Chines", "Automatico"];
-    in property <[string]> hardware-options: ["CPU"];
+    in property <[string]> hardware-options: ["CPU", "GPU (CUDA)"];
     in property <[string]> device-options: ["Dispositivo Padrao"];
     in property <bool> gpu-available: false;
 
@@ -109,7 +109,7 @@ export component SettingsPanel inherits Rectangle {
                 }
 
                 if root.gpu-available: Text {
-                    text: "GPU disponivel neste computador.";
+                    text: "GPU NVIDIA com CUDA detectada. Transcricao mais rapida!";
                     font-size: 12px;
                     color: AppStyle.success-green;
                 }
@@ -203,7 +203,7 @@ export component SettingsPanel inherits Rectangle {
                     spacing: AppStyle.spacing-small;
 
                     Button {
-                        text: "Selecionar Pasta";
+                        text: "📁 Selecionar Pasta";
                         clicked => { root.select-output-folder(); }
                     }
                 }
@@ -259,7 +259,7 @@ export component SettingsPanel inherits Rectangle {
                 alignment: end;
 
                 Button {
-                    text: "Salvar";
+                    text: "💾 Salvar";
                     primary: true;
                     clicked => { root.save-settings(); }
                 }

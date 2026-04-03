@@ -96,15 +96,30 @@ impl TranscriptionEngine for LocalEngine {
 
         on_progress(0.1);
 
-        // Carrega o modelo whisper
+        // Carrega o modelo whisper (com fallback GPU -> CPU)
         let mut ctx_params = whisper_rs::WhisperContextParameters::new();
         ctx_params.use_gpu(self.use_gpu);
 
-        let ctx = whisper_rs::WhisperContext::new_with_params(
+        let ctx = match whisper_rs::WhisperContext::new_with_params(
             self.model_path.to_str().unwrap_or_default(),
             ctx_params,
-        )
-        .context("Falha ao carregar modelo Whisper")?;
+        ) {
+            Ok(ctx) => ctx,
+            Err(e) if self.use_gpu => {
+                eprintln!(
+                    "Aviso: GPU indisponivel, usando CPU para transcricao: {}",
+                    e
+                );
+                let mut ctx_params = whisper_rs::WhisperContextParameters::new();
+                ctx_params.use_gpu(false);
+                whisper_rs::WhisperContext::new_with_params(
+                    self.model_path.to_str().unwrap_or_default(),
+                    ctx_params,
+                )
+                .context("Falha ao carregar modelo Whisper (CPU fallback)")?
+            }
+            Err(e) => return Err(e).context("Falha ao carregar modelo Whisper"),
+        };
 
         on_progress(0.2);
 

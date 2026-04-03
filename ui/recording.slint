@@ -67,24 +67,24 @@ export component RecordingPanel inherits Rectangle {
                 spacing: AppStyle.spacing-small;
 
                 if !root.is-recording: Button {
-                    text: "Iniciar Gravacao";
+                    text: "🎤 Iniciar Gravacao";
                     primary: true;
                     clicked => { root.start-recording(); }
                 }
 
                 if root.is-recording && !root.is-paused: Button {
-                    text: "Pausar";
+                    text: "⏸ Pausar";
                     clicked => { root.pause-recording(); }
                 }
 
                 if root.is-recording && root.is-paused: Button {
-                    text: "Retomar";
+                    text: "▶ Retomar";
                     primary: true;
                     clicked => { root.resume-recording(); }
                 }
 
                 if root.is-recording: Button {
-                    text: "Parar";
+                    text: "⏹ Parar";
                     clicked => { root.stop-recording(); }
                 }
             }

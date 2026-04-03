@@ -22,6 +22,9 @@ fn main() -> anyhow::Result<()> {
     // Carrega historico de gravacoes ao iniciar
     app.invoke_load_recordings();
 
+    // Verifica atualizacoes em background
+    app.invoke_check_for_updates();
+
     // Roda o event loop do Slint (bloqueia na main thread)
     app.run()?;
 

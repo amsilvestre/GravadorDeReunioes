@@ -1,6 +1,7 @@
 [env]
-VULKAN_SDK = "C:\\VulkanSDK\\1.3.296.0"
+CUDA_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2"
+CUDACXX = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2\\bin\\nvcc.exe"
 CMAKE_GENERATOR = "Ninja"
-CMAKE_C_COMPILER = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.39.33519\\bin\\Hostx64\\x64\\cl.exe"
-CMAKE_CXX_COMPILER = "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.39.33519\\bin\\Hostx64\\x64\\cl.exe"
-CMAKE_MAKE_PROGRAM = "C:\\VulkanSDK\\1.3.296.0\\Bin\\ninja.exe"
+CMAKE_MAKE_PROGRAM = "C:\\Users\\silve\\ninja\\ninja.exe"
+CMAKE_CUDA_FLAGS = "--allow-unsupported-compiler"
+CMAKE_CUDA_COMPILER = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2\\bin\\nvcc.exe"

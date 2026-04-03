@@ -25,6 +25,7 @@ export component TranscriptionPanel inherits Rectangle {
 
     // Callbacks
     callback transcribe();
+    callback open-audio-file();
     callback copy-to-clipboard();
     callback export-text();
     callback search-changed(string);
@@ -48,19 +49,24 @@ export component TranscriptionPanel inherits Rectangle {
 
             Rectangle { horizontal-stretch: 1; }
 
-            if root.has-recording && !root.is-transcribing: Button {
-                text: "Transcrever";
+            if (root.has-recording || root.is-transcribing) && !root.is-transcribing: Button {
+                text: "🎙 Transcrever";
                 primary: true;
                 clicked => { root.transcribe(); }
             }
 
+            if !root.is-transcribing: Button {
+                text: "📂 Abrir Áudio";
+                clicked => { root.open-audio-file(); }
+            }
+
             if root.segments.length > 0: Button {
-                text: "Copiar";
+                text: "📋 Copiar";
                 clicked => { root.copy-to-clipboard(); }
             }
 
             if root.segments.length > 0: Button {
-                text: "Exportar";
+                text: "💾 Exportar";
                 clicked => { root.export-text(); }
             }
         }
@@ -85,7 +91,7 @@ export component TranscriptionPanel inherits Rectangle {
             }
 
             Button {
-                text: "Buscar";
+                text: "🔍 Buscar";
                 clicked => { root.search-changed(root.search-text); }
             }
 

@@ -69,6 +69,13 @@ export component AppWindow inherits Window {
     // Controle do dialogo Sobre
     private property <bool> show-about: false;
 
+    // Controle do dialogo de atualizacao
+    in-out property <bool> show-update-dialog: false;
+    in-out property <string> update-version: "";
+    in-out property <string> update-url: "";
+    in-out property <string> update-body: "";
+    in-out property <bool> is-checking-update: false;
+
     // === Propriedades de gravacao ===
     in property <bool> is-recording: false;
     in property <bool> is-paused: false;
@@ -111,6 +118,7 @@ export component AppWindow inherits Window {
     callback pause-recording();
     callback resume-recording();
     callback transcribe();
+    callback open-audio-file();
     callback copy-to-clipboard();
     callback export-text();
     callback save-settings();
@@ -129,6 +137,8 @@ export component AppWindow inherits Window {
     callback select-recording(int);
     callback delete-recording(int);
     callback rename-recording(int, string);
+    callback check-for-updates();
+    callback download-and-install-update();
 
     HorizontalBox {
         // Sidebar
@@ -166,19 +176,19 @@ export component AppWindow inherits Window {
                 }
 
                 SidebarButton {
-                    label: "Gravar";
+                    label: "🎙 Gravar";
                     active: root.active-page == 0;
                     clicked => { root.active-page = 0; }
                 }
 
                 SidebarButton {
-                    label: "Historico";
+                    label: "📜 Historico";
                     active: root.active-page == 1;
                     clicked => { root.active-page = 1; }
                 }
 
                 SidebarButton {
-                    label: "Configuracoes";
+                    label: "⚙ Configuracoes";
                     active: root.active-page == 2;
                     clicked => { root.active-page = 2; }
                 }
@@ -208,7 +218,7 @@ export component AppWindow inherits Window {
                     }
 
                     Text {
-                        text: "Sobre";
+                        text: "ℹ Sobre";
                         font-size: 12px;
                         color: #9E9EBE;
                         horizontal-alignment: center;
@@ -244,7 +254,7 @@ export component AppWindow inherits Window {
                         resume-recording => { root.resume-recording(); }
                     }
 
-                    trans := TranscriptionPanel {
+                        trans := TranscriptionPanel {
                         vertical-stretch: 1;
                         segments: root.transcription-segments;
                         progress: root.transcription-progress;
@@ -255,6 +265,7 @@ export component AppWindow inherits Window {
                         search-text <=> root.transcription-search;
                         search-changed(text) => { root.transcription-search-changed(text); }
                         transcribe => { root.transcribe(); }
+                        open-audio-file => { root.open-audio-file(); }
                         copy-to-clipboard => { root.copy-to-clipboard(); }
                         export-text => { root.export-text(); }
                     }
@@ -445,6 +456,122 @@ export component AppWindow inherits Window {
                     Button {
                         text: "Fechar";
                         clicked => { root.show-about = false; }
+                    }
+                }
+            }
+        }
+    }
+
+    // === Dialogo "Atualizacao" (overlay) ===
+    if root.show-update-dialog: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: #00000080;
+
+        // Fecha ao clicar no fundo
+        TouchArea {
+            clicked => { root.show-update-dialog = false; }
+        }
+
+        // Card central
+        Rectangle {
+            width: 420px;
+            height: 280px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: AppStyle.bg-surface;
+            border-radius: AppStyle.border-radius;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000040;
+            drop-shadow-offset-y: 8px;
+
+            // Impede que cliques no card fechem o dialogo
+            TouchArea {}
+
+            VerticalBox {
+                padding: 28px;
+                spacing: AppStyle.spacing;
+                alignment: start;
+
+                // Cabecalho
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: AppStyle.success-green;
+
+                        Text {
+                            text: "🚀";
+                            font-size: 20px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    VerticalBox {
+                        spacing: 2px;
+                        padding: 0px;
+                        alignment: center;
+
+                        Text {
+                            text: "Atualização Disponivel!";
+                            font-size: 17px;
+                            font-weight: 700;
+                            color: AppStyle.text-primary;
+                        }
+
+                        Text {
+                            text: "Versao " + root.update-version;
+                            font-size: 12px;
+                            color: AppStyle.text-secondary;
+                        }
+                    }
+                }
+
+                // Divisor
+                Rectangle {
+                    height: 1px;
+                    background: AppStyle.divider;
+                }
+
+                // Descricao da atualizacao
+                if root.update-body != "": Text {
+                    text: root.update-body;
+                    font-size: 13px;
+                    color: AppStyle.text-primary;
+                    wrap: word-wrap;
+                    max-height: 80px;
+                }
+
+                if root.update-body == "": Text {
+                    text: "Uma nova versão do Gravador de Reuniões está disponível. Clique em 'Baixar e Instalar' para atualizar.";
+                    font-size: 13px;
+                    color: AppStyle.text-primary;
+                    wrap: word-wrap;
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                // Botoes
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    alignment: end;
+
+                    Button {
+                        text: "Agora Não";
+                        clicked => { root.show-update-dialog = false; }
+                    }
+
+                    Button {
+                        text: "⬇️ Baixar e Instalar";
+                        primary: true;
+                        clicked => { root.download-and-install-update(); }
                     }
                 }
             }

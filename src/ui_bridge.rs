@@ -50,11 +50,50 @@ fn apply_transcription_search(app: &AppWindow, state: &Arc<Mutex<AppState>>) {
 }
 
 fn detect_gpu_available() -> bool {
+    let cuda_dlls = [
+        "nvcuda.dll",
+        "cudart64_80.dll",
+        "cudart64_110.dll",
+        "cudart64_120.dll",
+        "cudart64_132.dll",
+    ];
+
+    for dll in cuda_dlls {
+        if std::path::Path::new("C:\\Windows\\System32")
+            .join(dll)
+            .exists()
+        {
+            return true;
+        }
+    }
+
+    if std::path::Path::new("C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.2").exists()
+    {
+        return true;
+    }
+
     std::process::Command::new("nvidia-smi")
         .arg("-L")
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+fn compare_versions(new: &str, current: &str) -> i32 {
+    let new_parts: Vec<u32> = new.split('.').filter_map(|s| s.parse().ok()).collect();
+    let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
+
+    for i in 0..std::cmp::max(new_parts.len(), current_parts.len()) {
+        let new_part = new_parts.get(i).unwrap_or(&0);
+        let current_part = current_parts.get(i).unwrap_or(&0);
+
+        if new_part > current_part {
+            return 1;
+        } else if new_part < current_part {
+            return -1;
+        }
+    }
+    0
 }
 
 pub struct AppState {
@@ -64,6 +103,7 @@ pub struct AppState {
     pub current_recording_path: Option<std::path::PathBuf>,
     pub last_transcription_text: Option<String>,
     pub last_transcription_segments: Vec<crate::TranscriptionSegment>,
+    pub update_url: String,
 }
 
 pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
@@ -74,6 +114,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         current_recording_path: None,
         last_transcription_text: None,
         last_transcription_segments: Vec::new(),
+        update_url: String::new(),
     }));
 
     // Flag compartilhada para controle de gravacao
@@ -402,6 +443,10 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 (wav_path, engine, api_key, models_dir, model_name, language_code, use_gpu)
             };
 
+            // Flag para parar o timer quando transcricao terminar
+            let timer_stop_flag = Arc::new(AtomicBool::new(false));
+            let timer_stop_flag_clone = timer_stop_flag.clone();
+
             // Atualiza UI: transcrevendo
             {
                 let w = app_weak.clone();
@@ -410,10 +455,35 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         app.set_is_transcribing(true);
                         app.set_transcription_progress(0.0);
                         app.set_transcription_status("Iniciando...".into());
-                        app.set_transcription_duration("".into());
+                        app.set_transcription_duration("Iniciando...".into());
                     }
                 });
             }
+
+            // Inicia thread do timer
+            let timer_app_weak = app_weak.clone();
+            std::thread::spawn(move || {
+                let start = std::time::Instant::now();
+                while !timer_stop_flag_clone.load(Ordering::Relaxed) {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    if timer_stop_flag_clone.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let elapsed = start.elapsed();
+                    let duration_text = format!(
+                        "{:02}:{:02}:{:02}",
+                        elapsed.as_secs() / 3600,
+                        (elapsed.as_secs() % 3600) / 60,
+                        elapsed.as_secs() % 60
+                    );
+                    let w = timer_app_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(app) = w.upgrade() {
+                            app.set_transcription_duration(duration_text.into());
+                        }
+                    });
+                }
+            });
 
             // Seleciona engine e transcreve
             use crate::transcription::TranscriptionEngine;
@@ -531,6 +601,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                         s.last_transcription_segments = model_segments.clone();
                     }
 
+                    timer_stop_flag.store(true, Ordering::Relaxed);
                     let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
                         app.set_is_transcribing(false);
                         app.set_transcription_progress(1.0);
@@ -558,6 +629,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                     send_notification("Transcrição Concluída", "A transcrição do áudio foi concluída.");
                 }
                 Err(e) => {
+                    timer_stop_flag.store(true, Ordering::Relaxed);
                     let err_msg: slint::SharedString = format!("Erro: {}", e).into();
                     let err_msg_clone = err_msg.clone();
                     let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
@@ -571,6 +643,226 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 }
             }
         });
+    });
+
+    // === Callback: Abrir arquivo de audio externo e transcrever ===
+    let state_clone = state.clone();
+    let app_weak = app.as_weak();
+    app.on_open_audio_file(move || {
+        let state = state_clone.clone();
+        let app_weak = app_weak.clone();
+
+        if let Some(file_path) = rfd::FileDialog::new()
+            .add_filter("Audio", &["wav", "mp3", "m4a", "ogg", "flac"])
+            .pick_file()
+        {
+            {
+                let mut s = state.lock().unwrap();
+                s.current_recording_path = Some(file_path.clone());
+                s.current_recording_id = None;
+            }
+
+            let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                app.set_has_recording(true);
+                app.set_transcription_segments(
+                    std::rc::Rc::new(slint::VecModel::from(Vec::<crate::TranscriptionSegment>::new())).into(),
+                );
+            });
+
+            let (wav_path, engine_type, api_key, models_dir, model_name, language_code, use_gpu) = {
+                let s = state.lock().unwrap();
+                let wav_path = file_path.clone();
+                let engine = s.config.engine;
+                let api_key = s.config.api_key.clone();
+                let model_name = s.config.model_name().to_string();
+                let models_dir = s.config.models_dir.clone();
+                let language_code = s.config.language_code();
+                let use_gpu = s.config.hardware_index == 1;
+                (wav_path, engine, api_key, models_dir, model_name, language_code, use_gpu)
+            };
+
+            std::thread::spawn(move || {
+                let timer_stop_flag = Arc::new(AtomicBool::new(false));
+                let timer_stop_flag_clone = timer_stop_flag.clone();
+
+                // Atualiza UI: transcrevendo
+                {
+                    let w = app_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(app) = w.upgrade() {
+                            app.set_is_transcribing(true);
+                            app.set_transcription_progress(0.0);
+                            app.set_transcription_status("Iniciando...".into());
+                            app.set_transcription_duration("Iniciando...".into());
+                        }
+                    });
+                }
+
+                let transcription_start = std::time::Instant::now();
+                let timer_app_weak = app_weak.clone();
+                std::thread::spawn(move || {
+                    while !timer_stop_flag_clone.load(Ordering::Relaxed) {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        if timer_stop_flag_clone.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let elapsed = transcription_start.elapsed();
+                        let duration_text = format!(
+                            "{:02}:{:02}:{:02}",
+                            elapsed.as_secs() / 3600,
+                            (elapsed.as_secs() % 3600) / 60,
+                            elapsed.as_secs() % 60
+                        );
+                        let w = timer_app_weak.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(app) = w.upgrade() {
+                                app.set_transcription_duration(duration_text.into());
+                            }
+                        });
+                    }
+                });
+
+                let progress_weak = app_weak.clone();
+                let on_progress: Box<dyn Fn(f32) + Send> = Box::new(move |p: f32| {
+                    let status = format!("Transcrevendo... {}%", (p * 100.0) as u32);
+                    let s: slint::SharedString = status.into();
+                    let w = progress_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(app) = w.upgrade() {
+                            app.set_transcription_progress(p);
+                            app.set_transcription_status(s);
+                        }
+                    });
+                });
+
+                use crate::transcription::TranscriptionEngine;
+                let result = if engine_type == 0 {
+                    if api_key.is_empty() {
+                        Err(anyhow::anyhow!("Chave API OpenAI nao configurada. Va em Configuracoes e insira sua API key."))
+                    } else {
+                        let w = app_weak.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(app) = w.upgrade() {
+                                app.set_transcription_status("Enviando para OpenAI...".into());
+                            }
+                        });
+                        let engine = crate::transcription::cloud::CloudEngine::new(api_key);
+                        engine.transcribe(&wav_path, language_code.as_deref(), on_progress)
+                    }
+                } else {
+                    let model_path = {
+                        let progress_weak = app_weak.clone();
+                        let model_name_dl = model_name.clone();
+                        let on_dl_progress = move |p: f32| {
+                            let pct = (p * 100.0) as u32;
+                            let status = format!("Baixando modelo ggml-{}.bin... {}%", model_name_dl, pct);
+                            let s: slint::SharedString = status.into();
+                            let w = progress_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(app) = w.upgrade() {
+                                    app.set_transcription_progress(p * 0.5);
+                                    app.set_transcription_status(s);
+                                }
+                            });
+                        };
+                        crate::transcription::model_downloader::ensure_model(&models_dir, &model_name, &on_dl_progress)
+                    };
+
+                    match model_path {
+                        Err(e) => Err(e),
+                        Ok(path) => {
+                            let w = app_weak.clone();
+                            let _ = slint::invoke_from_event_loop(move || {
+                                if let Some(app) = w.upgrade() {
+                                    app.set_transcription_progress(0.5);
+                                    app.set_transcription_status("Carregando modelo...".into());
+                                }
+                            });
+                            let progress_weak = app_weak.clone();
+                            let on_progress: Box<dyn Fn(f32) + Send> = Box::new(move |p: f32| {
+                                let overall = 0.5 + p * 0.5;
+                                let status = format!("Transcrevendo... {}%", (overall * 100.0) as u32);
+                                let s: slint::SharedString = status.into();
+                                let w = progress_weak.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(app) = w.upgrade() {
+                                        app.set_transcription_progress(overall);
+                                        app.set_transcription_status(s);
+                                    }
+                                });
+                            });
+                            let engine = crate::transcription::local::LocalEngine::new(path, use_gpu);
+                            engine.transcribe(&wav_path, language_code.as_deref(), on_progress)
+                        }
+                    }
+                };
+
+                match result {
+                    Ok(segments) => {
+                        timer_stop_flag.store(true, Ordering::Relaxed);
+                        let full_text: String = segments
+                            .iter()
+                            .map(|seg| seg.text.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        let model_segments: Vec<crate::TranscriptionSegment> = segments
+                            .iter()
+                            .map(|seg| {
+                                let secs = seg.start_ms / 1000;
+                                let mins = secs / 60;
+                                let timestamp = format!("{:02}:{:02}", mins, secs % 60);
+                                crate::TranscriptionSegment {
+                                    timestamp: timestamp.into(),
+                                    text: seg.text.clone().into(),
+                                }
+                            })
+                            .collect();
+                        {
+                            let mut s = state.lock().unwrap();
+                            s.last_transcription_text = Some(full_text.clone());
+                            s.last_transcription_segments = model_segments.clone();
+                        }
+
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_is_transcribing(false);
+                            app.set_transcription_progress(1.0);
+                            let elapsed = transcription_start.elapsed();
+                            let duration_text = format!(
+                                "Transcrição concluída em {:02}:{:02}:{:02}",
+                                elapsed.as_secs() / 3600,
+                                (elapsed.as_secs() % 3600) / 60,
+                                elapsed.as_secs() % 60
+                            );
+                            app.set_transcription_status(duration_text.clone().into());
+                            app.set_transcription_duration(duration_text.into());
+                            app.set_transcription_segments(std::rc::Rc::new(slint::VecModel::from(model_segments.clone())).into());
+                        });
+
+                        let app_for_filter = app_weak.clone();
+                        let state_for_filter = state.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(app) = app_for_filter.upgrade() {
+                                apply_transcription_search(&app, &state_for_filter);
+                            }
+                        });
+
+                        send_notification("Transcrição Concluída", "A transcrição do áudio foi concluída.");
+                    }
+                    Err(e) => {
+                        timer_stop_flag.store(true, Ordering::Relaxed);
+                        let err_msg: slint::SharedString = format!("Erro: {}", e).into();
+                        let err_msg_clone = err_msg.clone();
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_is_transcribing(false);
+                            app.set_transcription_status(err_msg_clone);
+                        });
+
+                        let err_str = format!("Erro: {}", e);
+                        send_notification("Erro na Transcrição", &err_str);
+                    }
+                }
+            });
+        }
     });
 
     // === Callback: Copiar para clipboard ===
@@ -826,6 +1118,121 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
         let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
             app.invoke_load_recordings();
         });
+    });
+
+    // === Callback: Verificar atualizacoes ===
+    let app_weak_update = app.as_weak();
+    let state_for_update = state.clone();
+    app.on_check_for_updates(move || {
+        let app_weak = app_weak_update.clone();
+        let state = state_for_update.clone();
+        std::thread::spawn(move || {
+            let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                app.set_is_checking_update(true);
+            });
+
+            let current_version = env!("CARGO_PKG_VERSION");
+
+            match reqwest::blocking::Client::new()
+                .get("https://api.github.com/repos/amsilvestre/GravadorDeReunioes/releases/latest")
+                .header("User-Agent", "AMS-Gravador-de-Reunioes")
+                .header("Accept", "application/vnd.github.v3+json")
+                .send()
+            {
+                Ok(response) => {
+                    if let Ok(json) = response.json::<serde_json::Value>() {
+                        let tag_name = json["tag_name"]
+                            .as_str()
+                            .unwrap_or("")
+                            .trim_start_matches('v')
+                            .to_string();
+                        let body = json["body"].as_str().unwrap_or("").to_string();
+                        let download_url = json["assets"]
+                            .as_array()
+                            .and_then(|assets| {
+                                assets
+                                    .iter()
+                                    .find(|a| a["name"].as_str().unwrap_or("").contains("Setup"))
+                            })
+                            .and_then(|asset| asset["browser_download_url"].as_str())
+                            .unwrap_or("")
+                            .to_string();
+
+                        let version_compare = compare_versions(&tag_name, current_version);
+                        if version_compare > 0 {
+                            let tag_name_owned = tag_name;
+                            let body_owned = body;
+                            let download_url_owned = download_url.clone();
+                            {
+                                let mut s = state.lock().unwrap();
+                                s.update_url = download_url.clone();
+                            }
+                            let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                                app.set_update_version(tag_name_owned.into());
+                                app.set_update_body(body_owned.into());
+                                app.set_update_url(download_url_owned.into());
+                                app.set_show_update_dialog(true);
+                                app.set_is_checking_update(false);
+                            });
+                        } else {
+                            let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                                app.set_is_checking_update(false);
+                            });
+                        }
+                    } else {
+                        let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                            app.set_is_checking_update(false);
+                        });
+                    }
+                }
+                Err(_) => {
+                    let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                        app.set_is_checking_update(false);
+                    });
+                }
+            }
+        });
+    });
+
+    // === Callback: Baixar e instalar atualizacao ===
+    let app_weak_install = app.as_weak();
+    let state_for_install = state.clone();
+    app.on_download_and_install_update(move || {
+        let state = state_for_install.clone();
+        // Get the URL from the shared state set during check_for_updates
+        let url = {
+            let s = state.lock().unwrap();
+            s.update_url.clone()
+        };
+
+        if !url.is_empty() {
+            let app_weak = app_weak_install.clone();
+            let url_copy = url.clone();
+            std::thread::spawn(move || {
+                let temp_dir = std::env::temp_dir();
+                let installer_path = temp_dir.join("AMS_Gravador_Update_Setup.exe");
+
+                match reqwest::blocking::Client::new().get(&url_copy).send() {
+                    Ok(mut response) => {
+                        if let Ok(mut file) = std::fs::File::create(&installer_path) {
+                            if std::io::copy(&mut response, &mut file).is_ok() {
+                                let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                                    app.set_show_update_dialog(false);
+                                });
+
+                                std::thread::sleep(std::time::Duration::from_millis(500));
+
+                                std::process::Command::new(&installer_path).spawn().ok();
+                                std::process::exit(0);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Erro ao baixar atualizacao: {}", e);
+                    }
+                }
+            });
+        }
     });
 
     Ok(())
