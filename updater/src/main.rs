@@ -111,12 +111,16 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
+        drop(stream);
+        drop(buffer);
+        drop(file);
+
         let _ = app_handle.upgrade_in_event_loop(|app: UpdaterWindow| {
             app.set_status_text("Instalando...".into());
             app.set_progress(1.0);
         });
 
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_secs(2));
 
         match Command::new(&installer_path).spawn() {
             Ok(_) => {}
