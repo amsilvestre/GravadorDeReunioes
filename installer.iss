@@ -2,7 +2,7 @@
 ; Compile este arquivo com o Inno Setup Compiler
 
 #define MyAppName "AMS Gravador de Reuniões"
-#define MyAppVersion "1.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "AMS"
 #define MyAppExeName "gravador-de-reunioes.exe"
 
@@ -30,6 +30,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cuda_dlls\cublas64_13.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cuda_dlls\cublasLt64_13.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cuda_dlls\cudart64_13.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]

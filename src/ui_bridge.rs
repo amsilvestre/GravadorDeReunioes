@@ -142,6 +142,7 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     app.set_api_key(config.api_key.into());
     app.set_output_dir(config.output_dir.to_string_lossy().to_string().into());
     app.set_gpu_available(gpu_available);
+    app.set_app_version(env!("CARGO_PKG_VERSION").into());
     app.global::<AppStyle>()
         .set_dark_theme(config.theme_index == 1);
 

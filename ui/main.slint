@@ -66,6 +66,9 @@ export component AppWindow inherits Window {
     // Estado da pagina ativa: 0=Gravar, 1=Historico, 2=Config
     in-out property <int> active-page: 0;
 
+    // Versao do aplicativo
+    in property <string> app-version: "1.0.1";
+
     // Controle do dialogo Sobre
     private property <bool> show-about: false;
 
@@ -376,7 +379,7 @@ export component AppWindow inherits Window {
                         }
 
                         Text {
-                            text: "Versao 1.0";
+                            text: "Versao " + root.app-version;
                             font-size: 12px;
                             color: AppStyle.text-secondary;
                         }
