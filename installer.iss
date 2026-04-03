@@ -30,6 +30,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "target\release\updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cuda_dlls\cublas64_13.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cuda_dlls\cublasLt64_13.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cuda_dlls\cudart64_13.dll"; DestDir: "{app}"; Flags: ignoreversion

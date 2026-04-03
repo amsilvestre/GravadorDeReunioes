@@ -1,0 +1,52 @@
+import { ProgressIndicator, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component UpdaterWindow inherits Window {
+    title: "AMS Gravador - Atualizando";
+    width: 420px;
+    height: 180px;
+    background: #F5F5F5;
+
+    in-out property <float> progress: 0.0;
+    in-out property <string> status-text: "Iniciando...";
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: root.background;
+
+        VerticalBox {
+            padding: 32px;
+            spacing: 24px;
+            alignment: start;
+
+            Text {
+                text: "Atualização em Andamento";
+                font-size: 18px;
+                font-weight: 700;
+                color: #212121;
+            }
+
+            ProgressIndicator {
+                progress: root.progress;
+                height: 12px;
+            }
+
+            Text {
+                text: root.status-text;
+                font-size: 13px;
+                color: #757575;
+            }
+
+            HorizontalBox {
+                alignment: end;
+
+                Text {
+                    text: Math.round(root.progress * 100) + "%";
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #1565C0;
+                }
+            }
+        }
+    }
+}
