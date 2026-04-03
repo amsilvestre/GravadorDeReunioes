@@ -402,14 +402,14 @@ export component AppWindow inherits Window {
 
                 // Descricao
                 Text {
-                    text: "Programa para gravar reuniões ou áudio do microfone e transcrever para texto usando Whisper (Local ou Cloud).";
+                    text: "Programa para gravar reuniões ou áudio e transcrever para texto usando Whisper (Local ou Cloud). Suporta arquivos MP3, OGG, FLAC, M4A e WAV.";
                     font-size: 13px;
                     color: AppStyle.text-primary;
                     wrap: word-wrap;
                 }
 
                 Text {
-                    text: "Transcrição disponível em:";
+                    text: "Motores de transcricao:";
                     font-size: 13px;
                     color: AppStyle.text-primary;
                     wrap: word-wrap;
@@ -450,12 +450,20 @@ export component AppWindow inherits Window {
                     }
 
                     Text {
-                        text: "Whisper Local — Modelos rodando na CPU, sem internet";
+                        text: "Whisper Local — CPU ou GPU NVIDIA com CUDA";
                         font-size: 13px;
                         color: AppStyle.text-secondary;
                         wrap: word-wrap;
                         horizontal-stretch: 1;
                     }
+                }
+
+                // Tecnologias
+                Text {
+                    text: "Tecnologias: Rust + Slint UI";
+                    font-size: 12px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
                 }
 
                 Rectangle { vertical-stretch: 1; }
