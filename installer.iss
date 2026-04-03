@@ -2,7 +2,7 @@
 ; Compile este arquivo com o Inno Setup Compiler
 
 #define MyAppName "AMS Gravador de Reuniões"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "AMS"
 #define MyAppExeName "gravador-de-reunioes.exe"
 
