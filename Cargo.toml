@@ -7,7 +7,7 @@ members = [
 
 [package]
 name = "gravador-de-reunioes"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 description = "Gravador de reunioes com transcricao automatica"
 
