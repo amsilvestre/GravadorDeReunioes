@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ScrollView, ProgressIndicator } from "std-widgets.slint";
 import { AppStyle } from "style.slint";
 import { RecordingPanel } from "recording.slint";
 import { TranscriptionPanel, TranscriptionSegment } from "transcription.slint";
@@ -78,6 +78,14 @@ export component AppWindow inherits Window {
     in-out property <string> update-url: "";
     in-out property <string> update-body: "";
     in-out property <bool> is-checking-update: false;
+
+    // Controle do progresso de download de atualizacao
+    in-out property <float> update-progress: 0.0;
+    in-out property <bool> show-update-progress-dialog: false;
+
+    // Controle do dialogo de erro de atualizacao
+    in-out property <string> update-error-message: "";
+    in-out property <bool> show-update-error-dialog: false;
 
     // === Propriedades de gravacao ===
     in property <bool> is-recording: false;
@@ -543,20 +551,29 @@ export component AppWindow inherits Window {
                     background: AppStyle.divider;
                 }
 
-                // Descricao da atualizacao
-                if root.update-body != "": Text {
-                    text: root.update-body;
-                    font-size: 13px;
-                    color: AppStyle.text-primary;
-                    wrap: word-wrap;
-                    max-height: 80px;
-                }
+                // Descricao da atualizacao com scroll
+                ScrollView {
+                    width: 100%;
+                    height: 80px;
 
-                if root.update-body == "": Text {
-                    text: "Uma nova versão do Gravador de Reuniões está disponível. Clique em 'Baixar e Instalar' para atualizar.";
-                    font-size: 13px;
-                    color: AppStyle.text-primary;
-                    wrap: word-wrap;
+                    VerticalBox {
+                        spacing: 4px;
+                        padding: 0px;
+
+                        if root.update-body != "": Text {
+                            text: root.update-body;
+                            font-size: 13px;
+                            color: AppStyle.text-primary;
+                            wrap: word-wrap;
+                        }
+
+                        if root.update-body == "": Text {
+                            text: "Uma nova versão do Gravador de Reuniões está disponível. Clique em 'Baixar e Instalar' para atualizar.";
+                            font-size: 13px;
+                            color: AppStyle.text-primary;
+                            wrap: word-wrap;
+                        }
+                    }
                 }
 
                 Rectangle { vertical-stretch: 1; }
@@ -575,6 +592,133 @@ export component AppWindow inherits Window {
                         text: "⬇️ Baixar e Instalar";
                         primary: true;
                         clicked => { root.download-and-install-update(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // === Dialogo de progresso de download ===
+    if root.show-update-progress-dialog: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: #00000080;
+
+        Rectangle {
+            width: 360px;
+            height: 140px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: AppStyle.bg-surface;
+            border-radius: AppStyle.border-radius;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000040;
+            drop-shadow-offset-y: 8px;
+
+            VerticalBox {
+                padding: 28px;
+                spacing: 16px;
+                alignment: start;
+
+                Text {
+                    text: "Baixando atualização...";
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: AppStyle.text-primary;
+                }
+
+                ProgressIndicator {
+                    progress: root.update-progress;
+                    height: 8px;
+                }
+
+                Text {
+                    text: Math.round(root.update-progress * 100) + "%";
+                    font-size: 13px;
+                    color: AppStyle.text-secondary;
+                }
+            }
+        }
+    }
+
+    // === Dialogo de erro de atualizacao ===
+    if root.show-update-error-dialog: Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        background: #00000080;
+
+        // Fecha ao clicar no fundo
+        TouchArea {
+            clicked => { root.show-update-error-dialog = false; }
+        }
+
+        Rectangle {
+            width: 400px;
+            height: 180px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: AppStyle.bg-surface;
+            border-radius: AppStyle.border-radius;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000040;
+            drop-shadow-offset-y: 8px;
+
+            TouchArea {}
+
+            VerticalBox {
+                padding: 28px;
+                spacing: 16px;
+                alignment: start;
+
+                HorizontalBox {
+                    spacing: AppStyle.spacing-small;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: AppStyle.recording-red;
+
+                        Text {
+                            text: "❌";
+                            font-size: 20px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    VerticalBox {
+                        spacing: 2px;
+                        padding: 0px;
+                        alignment: center;
+
+                        Text {
+                            text: "Erro ao Baixar";
+                            font-size: 17px;
+                            font-weight: 700;
+                            color: AppStyle.text-primary;
+                        }
+                    }
+                }
+
+                Text {
+                    text: root.update-error-message;
+                    font-size: 13px;
+                    color: AppStyle.text-secondary;
+                    wrap: word-wrap;
+                }
+
+                HorizontalBox {
+                    alignment: end;
+
+                    Button {
+                        text: "OK";
+                        clicked => { root.show-update-error-dialog = false; }
                     }
                 }
             }

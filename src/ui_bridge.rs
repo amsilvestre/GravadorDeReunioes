@@ -8,6 +8,7 @@ use crate::AppWindow;
 use anyhow::Result;
 use arboard;
 use slint::ComponentHandle;
+use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -1200,7 +1201,6 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
     let state_for_install = state.clone();
     app.on_download_and_install_update(move || {
         let state = state_for_install.clone();
-        // Get the URL from the shared state set during check_for_updates
         let url = {
             let s = state.lock().unwrap();
             s.update_url.clone()
@@ -1213,23 +1213,125 @@ pub fn setup(app: &AppWindow, db: Database, config: AppConfig) -> Result<()> {
                 let temp_dir = std::env::temp_dir();
                 let installer_path = temp_dir.join("AMS_Gravador_Update_Setup.exe");
 
-                match reqwest::blocking::Client::new().get(&url_copy).send() {
-                    Ok(mut response) => {
-                        if let Ok(mut file) = std::fs::File::create(&installer_path) {
-                            if std::io::copy(&mut response, &mut file).is_ok() {
-                                let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
-                                    app.set_show_update_dialog(false);
-                                });
+                let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                    app.set_show_update_dialog(false);
+                    app.set_update_progress(0.0);
+                    app.set_show_update_progress_dialog(true);
+                });
 
-                                std::thread::sleep(std::time::Duration::from_millis(500));
+                let client = match reqwest::blocking::Client::builder()
+                    .timeout(std::time::Duration::from_secs(120))
+                    .build()
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_show_update_progress_dialog(false);
+                            app.set_update_error_message(
+                                format!("Erro ao criar cliente HTTP: {}", e).into(),
+                            );
+                            app.set_show_update_error_dialog(true);
+                        });
+                        return;
+                    }
+                };
 
-                                std::process::Command::new(&installer_path).spawn().ok();
-                                std::process::exit(0);
-                            }
+                let response = match client.get(&url_copy).send() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_show_update_progress_dialog(false);
+                            app.set_update_error_message(
+                                format!("Falha ao conectar: {}", e).into(),
+                            );
+                            app.set_show_update_error_dialog(true);
+                        });
+                        return;
+                    }
+                };
+
+                if !response.status().is_success() {
+                    let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                        app.set_show_update_progress_dialog(false);
+                        app.set_update_error_message(
+                            format!("Servidor retornou erro: HTTP {}", response.status()).into(),
+                        );
+                        app.set_show_update_error_dialog(true);
+                    });
+                    return;
+                }
+
+                let total_size = response.content_length().unwrap_or(0);
+                let mut downloaded: u64 = 0;
+
+                let mut file = match std::fs::File::create(&installer_path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_show_update_progress_dialog(false);
+                            app.set_update_error_message(
+                                format!("Erro ao criar arquivo: {}", e).into(),
+                            );
+                            app.set_show_update_error_dialog(true);
+                        });
+                        return;
+                    }
+                };
+
+                let mut stream = response;
+                let mut buffer = vec![0u8; 8192];
+
+                loop {
+                    let bytes_read = match stream.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(n) => n,
+                        Err(e) => {
+                            let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                                app.set_show_update_progress_dialog(false);
+                                app.set_update_error_message(
+                                    format!("Erro durante download: {}", e).into(),
+                                );
+                                app.set_show_update_error_dialog(true);
+                            });
+                            let _ = std::fs::remove_file(&installer_path);
+                            return;
                         }
+                    };
+
+                    if file.write_all(&buffer[..bytes_read]).is_err() {
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_show_update_progress_dialog(false);
+                            app.set_update_error_message("Erro ao salvar arquivo".into());
+                            app.set_show_update_error_dialog(true);
+                        });
+                        let _ = std::fs::remove_file(&installer_path);
+                        return;
+                    }
+
+                    downloaded += bytes_read as u64;
+                    if total_size > 0 {
+                        let progress = downloaded as f32 / total_size as f32;
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_update_progress(progress);
+                        });
+                    }
+                }
+
+                let _ = app_weak.upgrade_in_event_loop(|app: AppWindow| {
+                    app.set_show_update_progress_dialog(false);
+                });
+
+                match std::process::Command::new(&installer_path).spawn() {
+                    Ok(_) => {
+                        std::process::exit(0);
                     }
                     Err(e) => {
-                        eprintln!("Erro ao baixar atualizacao: {}", e);
+                        let _ = app_weak.upgrade_in_event_loop(move |app: AppWindow| {
+                            app.set_update_error_message(
+                                format!("Erro ao iniciar instalador: {}", e).into(),
+                            );
+                            app.set_show_update_error_dialog(true);
+                        });
                     }
                 }
             });

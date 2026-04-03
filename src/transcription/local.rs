@@ -1,5 +1,8 @@
 use crate::transcription::{TranscriptionEngine, TranscriptionSegment};
 use anyhow::{Context, Result};
+use rodio::{Decoder, Source};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 pub struct LocalEngine {
@@ -15,28 +18,19 @@ impl LocalEngine {
         }
     }
 
-    /// Carrega arquivo WAV e converte para 16kHz mono f32 (formato exigido pelo whisper)
-    fn load_wav_as_16khz_mono(wav_path: &Path) -> Result<Vec<f32>> {
-        let mut reader = hound::WavReader::open(wav_path).context("Falha ao abrir arquivo WAV")?;
-        let spec = reader.spec();
+    fn load_audio_as_16khz_mono(audio_path: &Path) -> Result<Vec<f32>> {
+        let file = File::open(audio_path).context("Falha ao abrir arquivo de áudio")?;
+        let reader = BufReader::new(file);
+        let source = Decoder::new(reader)
+            .context("Falha ao decodificar arquivo de áudio. Formato não suportado.")?;
 
-        // Le todos os samples como f32
-        let samples: Vec<f32> = match spec.sample_format {
-            hound::SampleFormat::Float => reader
-                .samples::<f32>()
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-            hound::SampleFormat::Int => {
-                let max_val = (1 << (spec.bits_per_sample - 1)) as f32;
-                reader
-                    .samples::<i32>()
-                    .map(|s| s.map(|v| v as f32 / max_val))
-                    .collect::<std::result::Result<Vec<_>, _>>()?
-            }
-        };
+        let sample_rate = source.sample_rate();
+        let channels = source.channels();
 
-        // Converte para mono se stereo
-        let mono = if spec.channels > 1 {
-            let ch = spec.channels as usize;
+        let samples: Vec<f32> = source.convert_samples::<f32>().collect();
+
+        let mono = if channels > 1 {
+            let ch = channels as usize;
             let num_frames = samples.len() / ch;
             let mut mono = Vec::with_capacity(num_frames);
             for frame in 0..num_frames {
@@ -51,13 +45,11 @@ impl LocalEngine {
             samples
         };
 
-        // Resample para 16kHz se necessario
-        if spec.sample_rate == 16000 {
+        if sample_rate == 16000 {
             return Ok(mono);
         }
 
-        // Resample simples por interpolacao linear
-        let ratio = 16000.0 / spec.sample_rate as f64;
+        let ratio = 16000.0 / sample_rate as f64;
         let output_len = (mono.len() as f64 * ratio) as usize;
         let mut resampled = Vec::with_capacity(output_len);
 
@@ -123,9 +115,8 @@ impl TranscriptionEngine for LocalEngine {
 
         on_progress(0.2);
 
-        // Carrega e converte o audio
         let audio_data =
-            Self::load_wav_as_16khz_mono(wav_path).context("Falha ao carregar audio WAV")?;
+            Self::load_audio_as_16khz_mono(wav_path).context("Falha ao carregar audio")?;
 
         on_progress(0.3);
 
